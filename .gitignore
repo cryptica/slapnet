@@ -1,3 +1,7 @@
+# Vim
+*.swp
+
+# Haskell
 dist
 cabal-dev
 *.o
