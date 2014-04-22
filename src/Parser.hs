@@ -2,13 +2,13 @@ module Parser
     (parseString, parseFile)
 where
 
-import Control.Applicative ((<*))
-import Control.Monad (liftM)
+import Control.Applicative ((<*),(*>),(<*>),(<$>))
 import Text.Parsec
 import Text.Parsec.Language (LanguageDef, emptyDef)
 import qualified Text.Parsec.Token as Token
 
 import PetriNet (PetriNet,makePetriNet)
+import Property
 
 type Parser u a = Parsec String u a
 
@@ -40,10 +40,14 @@ brackets :: Parser u a -> Parser u a
 brackets   = Token.brackets   lexer -- parses p surrounded by brackets
 braces :: Parser u a -> Parser u a
 braces     = Token.braces     lexer -- parses p surrounded by braces
+parens :: Parser u a -> Parser u a
+parens     = Token.parens     lexer -- parses p surrounded by parenthesis
 natural :: Parser u Integer
 natural    = Token.natural    lexer -- parses a natural number
+integer :: Parser u Integer
+integer    = Token.integer    lexer -- parses an integer
 comma :: Parser u String
-comma       = Token.comma       lexer -- parses a comma
+comma      = Token.comma       lexer -- parses a comma
 whiteSpace :: Parser u ()
 whiteSpace = Token.whiteSpace lexer -- parses whitespace
 
@@ -51,7 +55,7 @@ optionalCommaSep :: Parser u a -> Parser u [a]
 optionalCommaSep p = many (p <* optional comma)
 
 singleOrList :: Parser u a -> Parser u [a]
-singleOrList p = braces (optionalCommaSep p) <|> liftM (:[]) p
+singleOrList p = braces (optionalCommaSep p) <|> (:[]) <$> p
 
 numberOption :: Parser u Integer
 numberOption = option 1 (brackets natural)
@@ -63,13 +67,13 @@ identList :: Parser u [String]
 identList = singleOrList ident
 
 places :: Parser u [String]
-places = reserved "places" >> identList
+places = reserved "places" *> identList
 
 transitions :: Parser u [String]
-transitions = reserved "transitions" >> identList
+transitions = reserved "transitions" *> identList
 
 initial :: Parser u [(String,Integer)]
-initial = reserved "initial" >> singleOrList (do
+initial = reserved "initial" *> singleOrList (do
             n <- ident
             i <- numberOption
             return (n,i)
@@ -98,14 +102,13 @@ data Statement = Places [String] | Transitions [String] |
                  Arcs [(String,String,Integer)] | Initial [(String,Integer)]
 
 statement :: Parser u Statement
-statement = liftM Places places <|>
-            liftM Transitions transitions <|>
-            liftM Arcs arcs <|>
-            liftM Initial initial
+statement = Places <$> places <|>
+            Transitions <$> transitions <|>
+            Arcs <$> arcs <|>
+            Initial <$> initial
 
 petriNet :: Parser u PetriNet
 petriNet = do
-            whiteSpace
             reserved "petri"
             reserved "net"
             name <- option "" ident
@@ -120,15 +123,78 @@ petriNet = do
                   Arcs a -> (ps,ts,a ++ as,is)
                   Initial i -> (ps,ts,as,i ++ is)
 
-parseString :: String -> PetriNet
+preFactor :: Parser u Integer
+preFactor = (reservedOp "-" *> return (-1)) <|>
+            (reservedOp "+" *> return 1)
+
+linAtom :: Integer -> Parser u LinAtom
+linAtom fac = ( natural >>= \lhs ->
+                option (Const (fac*lhs))
+                      ((Var (fac*lhs)) <$> (reservedOp "*" *> ident))
+              ) <|> ((Var fac) <$> ident)
+
+term :: Parser u Term
+term = Term <$> ((:) <$> (option 1 preFactor >>= linAtom) <*>
+                         (many (preFactor >>= linAtom)))
+
+parseOp :: Parser u Op
+parseOp = (reservedOp "<" *> return Lt) <|>
+          (reservedOp "<=" *> return Le) <|>
+          (reservedOp "=" *> return Eq) <|>
+          (reservedOp ">" *> return Gt) <|>
+          (reservedOp ">=" *> return Ge)
+
+atom :: Parser u Formula
+atom = do
+        lhs <- term
+        op <- parseOp
+        rhs <- term
+        return (Atom (LinIneq lhs op rhs))
+
+parensForm :: Parser u Formula
+parensForm = atom <|> parens formula
+
+negation :: Parser u Formula
+negation = (Neg <$> (reservedOp "!" *> negation)) <|> parensForm
+
+conjunction :: Parser u Formula
+conjunction = do
+        lhs <- negation
+        option lhs ((lhs :&:) <$> (reservedOp "&" *> conjunction))
+
+disjunction :: Parser u Formula
+disjunction = do
+        lhs <- conjunction
+        option lhs ((lhs :|:) <$> (reservedOp "|" *> disjunction))
+
+formula :: Parser u Formula
+formula = disjunction
+
+propertyType :: Parser u PropertyType
+propertyType =
+        (reserved "safety" *> return Safety) <|>
+        (reserved "liveness" *> return Liveness)
+
+property :: Parser u Property
+property = do
+        ptype <- propertyType
+        reserved "property"
+        name <- option "" ident
+        pformulas <- braces formula
+        return $ Property name ptype pformulas
+
+parseContent :: Parser u Property
+parseContent = whiteSpace *> property
+
+parseString :: String -> Property
 parseString str =
-        case parse petriNet "" str of
+        case parse parseContent "" str of
             Left e -> error $ show e
             Right r -> r
 
-parseFile :: String -> IO PetriNet
+parseFile :: String -> IO Property
 parseFile file =  do
         contents <- readFile file
-        case parse petriNet file contents of
+        case parse parseContent file contents of
             Left e -> print e >> fail "parse error"
             Right r -> return r
