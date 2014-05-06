@@ -14,10 +14,11 @@ data PetriNet = PetriNet {
 }
 
 instance Show PetriNet where
-        show net = "Petri net " ++ name net ++ "\n" ++
-                   "Places: " ++ unwords (places net) ++ "\n" ++
-                   "Transitions: " ++ unwords (transitions net) ++ "\n" ++
-                   "Arcs:\n" ++ unlines
+        show net = "Petri net" ++
+                    (if null (name net) then "" else " " ++ show (name net)) ++
+                   "\nPlaces: " ++ unwords (places net) ++
+                   "\nTransitions: " ++ unwords (transitions net) ++
+                   "\nArcs:\n" ++ unlines
                         (map (\(l,r,w) -> l ++ " ->" ++
                             (if w /= 1 then "[" ++ show w ++ "]" else []) ++
                             " " ++ r)

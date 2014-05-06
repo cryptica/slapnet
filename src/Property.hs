@@ -29,9 +29,9 @@ data Op = Gt | Ge | Eq | Le | Lt
 
 instance Show Op where
         show Gt = ">"
-        show Ge = ">="
+        show Ge = "≥"
         show Eq = "="
-        show Le = "<="
+        show Le = "≤"
         show Lt = "<"
 
 data LinearInequation = LinIneq Term Op Term
@@ -62,6 +62,8 @@ instance Show PropertyType where
 data Property = Property String PropertyType Formula
 
 instance Show Property where
-        show (Property name ptype formula) = show ptype ++ " " ++ show name ++
-            " { " ++ show formula ++ " }"
+        show (Property name ptype formula) =
+            show ptype ++ " property " ++
+            (if null name then "" else show name ++ " ") ++
+            "{ " ++ show formula ++ " }"
 
