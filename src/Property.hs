@@ -49,7 +49,7 @@ infixr 2 :|:
 
 instance Show Formula where
         show (Atom a) = show a
-        show (Neg p) = "¬" ++ show p
+        show (Neg p) = "¬" ++ "(" ++ show p ++ ")"
         show (p :&: q) = "(" ++ show p ++ " ∧ " ++ show q ++ ")"
         show (p :|: q) = "(" ++ show p ++ " ∨ " ++ show q ++ ")"
 
@@ -59,11 +59,15 @@ instance Show PropertyType where
         show Safety = "safety"
         show Liveness = "liveness"
 
-data Property = Property String PropertyType Formula
+data Property = Property {
+        pname :: String,
+        ptype :: PropertyType,
+        pformula :: Formula
+}
 
 instance Show Property where
-        show (Property name ptype formula) =
-            show ptype ++ " property " ++
-            (if null name then "" else show name ++ " ") ++
-            "{ " ++ show formula ++ " }"
+        show p =
+            show (ptype p) ++ " property " ++
+            (if null (pname p) then "" else show (pname p) ++ " ") ++
+            "{ " ++ show (pformula p) ++ " }"
 

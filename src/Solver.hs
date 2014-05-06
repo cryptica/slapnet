@@ -48,9 +48,9 @@ buildModel net = do
         return $ M.fromList (vars `zip` syms)
 
 checkConstraints :: PetriNet -> Property -> Symbolic SBool
-checkConstraints net (Property _ _ f) = do
+checkConstraints net p = do
         model <- buildModel net
-        evaluateFormula model f
+        evaluateFormula model (pformula p)
 
 checkSat :: PetriNet -> Property -> IO Bool
 checkSat net p = do

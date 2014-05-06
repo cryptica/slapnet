@@ -22,7 +22,7 @@ languageDef =
                  Token.identLetter     = alphaNum <|> char '_',
                  Token.reservedNames   = [],
                  Token.reservedOpNames = ["->", "<", "<=", "=", ">=", ">",
-                                          "+", "-", "*", "&", "|", "!"]
+                                          "+", "-", "*", "&&", "||", "!"]
                  }
 
 lexer :: Token.TokenParser u
@@ -158,12 +158,12 @@ negation = (Neg <$> (reservedOp "!" *> negation)) <|> parensForm
 conjunction :: Parser u Formula
 conjunction = do
         lhs <- negation
-        option lhs ((lhs :&:) <$> (reservedOp "&" *> conjunction))
+        option lhs ((lhs :&:) <$> (reservedOp "&&" *> conjunction))
 
 disjunction :: Parser u Formula
 disjunction = do
         lhs <- conjunction
-        option lhs ((lhs :|:) <$> (reservedOp "|" *> disjunction))
+        option lhs ((lhs :|:) <$> (reservedOp "||" *> disjunction))
 
 formula :: Parser u Formula
 formula = disjunction
@@ -175,11 +175,11 @@ propertyType =
 
 property :: Parser u Property
 property = do
-        ptype <- propertyType
+        pt <- propertyType
         reserved "property"
         name <- option "" ident
-        pformulas <- braces formula
-        return $ Property name ptype pformulas
+        form <- braces formula
+        return Property { pname=name, ptype=pt, pformula=form }
 
 parseContent :: Parser u (PetriNet,[Property])
 parseContent = do

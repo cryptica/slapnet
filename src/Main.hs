@@ -5,9 +5,13 @@ import System.Environment (getArgs)
 import Parser (parseFile)
 import PetriNet
 import Property
+import Solver
 
-checkProperty :: PetriNet -> Property -> Bool
-checkProperty net p = True
+checkProperty :: PetriNet -> Property -> IO String
+checkProperty net p = do
+        r <- checkSat net p
+        return (if r then "Property not satisfied"
+                     else "Property satisfied")
 
 main :: IO ()
 main = do
@@ -19,6 +23,7 @@ main = do
         putStrLn $ "Analyzing " ++ showName net
         mapM_ (\p -> do
                   putStrLn $ "Checking " ++ show p
-                  putStrLn $ show $ checkProperty net p
+                  r <- checkProperty net p
+                  putStrLn r
               ) properties
 
