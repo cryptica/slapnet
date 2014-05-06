@@ -113,7 +113,6 @@ petriNet = do
             reserved "net"
             name <- option "" ident
             statements <- braces (many statement)
-            eof
             let (p,t,a,i) = foldl splitStatement ([],[],[],[]) statements
             return $ makePetriNet name p t a i
         where
@@ -128,14 +127,13 @@ preFactor = (reservedOp "-" *> return (-1)) <|>
             (reservedOp "+" *> return 1)
 
 linAtom :: Integer -> Parser u LinAtom
-linAtom fac = ( natural >>= \lhs ->
-                option (Const (fac*lhs))
-                      ((Var (fac*lhs)) <$> (reservedOp "*" *> ident))
-              ) <|> ((Var fac) <$> ident)
+linAtom fac = ( integer >>= \lhs ->
+                option (Const (fac*lhs)) $ Var (fac*lhs) <$> (reservedOp "*" *> ident)
+              ) <|> Var fac <$> ident
 
 term :: Parser u Term
 term = Term <$> ((:) <$> (option 1 preFactor >>= linAtom) <*>
-                         (many (preFactor >>= linAtom)))
+                         many (preFactor >>= linAtom))
 
 parseOp :: Parser u Op
 parseOp = (reservedOp "<" *> return Lt) <|>
@@ -183,16 +181,21 @@ property = do
         pformulas <- braces formula
         return $ Property name ptype pformulas
 
-parseContent :: Parser u Property
-parseContent = whiteSpace *> property
+parseContent :: Parser u (PetriNet,[Property])
+parseContent = do
+        whiteSpace
+        net <- petriNet
+        properties <- many property
+        eof
+        return (net, properties)
 
-parseString :: String -> Property
+parseString :: String -> (PetriNet,[Property])
 parseString str =
         case parse parseContent "" str of
             Left e -> error $ show e
             Right r -> r
 
-parseFile :: String -> IO Property
+parseFile :: String -> IO (PetriNet,[Property])
 parseFile file =  do
         contents <- readFile file
         case parse parseContent file contents of
