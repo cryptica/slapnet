@@ -22,6 +22,7 @@ executable slapnet
   other-modules:
     PetriNet
     Parser
+    Solver
   -- other-extensions:
   build-depends:       base >=4.6 && <4.7, sbv, parsec, containers
   hs-source-dirs:      src
