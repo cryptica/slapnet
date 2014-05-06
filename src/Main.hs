@@ -16,7 +16,7 @@ main = do
         putStrLn "Safety and Liveness Analysis of Petri Nets with SMT solvers"
         putStrLn $ "Reading \"" ++ file ++ "\""
         (net,properties) <- parseFile file
-        putStrLn $ "Analyzing " ++ show net
+        putStrLn $ "Analyzing " ++ showName net
         mapM_ (\p -> do
                   putStrLn $ "Checking " ++ show p
                   putStrLn $ show $ checkProperty net p

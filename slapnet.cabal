@@ -23,6 +23,6 @@ executable slapnet
     PetriNet
     Parser
   -- other-extensions:
-  build-depends:       base >=4.6 && <4.7, sbv, parsec
+  build-depends:       base >=4.6 && <4.7, sbv, parsec, containers
   hs-source-dirs:      src
   default-language:    Haskell2010
