@@ -49,29 +49,43 @@ checkPlaceEquation m net p = do
 
 checkStateConstraints :: Model -> PetriNet -> Symbolic SBool
 checkStateConstraints m net = do
-        placeEquations <- mapM (checkPlaceEquation m net) $ places net
-        return $ bAnd placeEquations
+        pEquations <- mapM (checkPlaceEquation m net) $ places net
+        return $ bAnd pEquations
 
-buildModel :: PetriNet -> Symbolic Model
-buildModel net = do
+checkTransitionEquation :: Model -> PetriNet -> String -> Symbolic SBool
+checkTransitionEquation m net t = do
+            incoming <- mapM addPlace $ lpre net t
+            outgoing <- mapM addPlace $ lpost net t
+            return $ sum outgoing - sum incoming .>= 0
+        where addPlace (p,w) = return $ literal w * (m M.! p)
+
+checkTInvariantConstraints :: Model -> PetriNet -> Symbolic SBool
+checkTInvariantConstraints m net = do
+        tEquations <- mapM (checkTransitionEquation m net) $ transitions net
+        return $ bAnd tEquations
+
+buildSymbolicModel :: PetriNet -> Symbolic Model
+buildSymbolicModel net = do
         let vars = places net ++ transitions net
         syms <- mapM exists vars
         return $ M.fromList (vars `zip` syms)
 
 checkConstraints :: PetriNet -> Property -> Symbolic SBool
 checkConstraints net p = do
-        model <- buildModel net
-        r1 <- checkStateConstraints model net
+        model <- buildSymbolicModel net
+        r1 <- case ptype p of
+                  Safety -> checkStateConstraints model net
+                  Liveness -> checkTInvariantConstraints model net
         r2 <- evaluateFormula model (pformula p)
         return $ r1 &&& r2
 
-checkSat :: PetriNet -> Property -> IO Bool
+checkSat :: PetriNet -> Property -> IO (Maybe (M.Map String Integer))
 checkSat net p = do
         (SatResult result) <- sat $ checkConstraints net p
-        case result of
-            Unsatisfiable _ -> return False
-            Satisfiable _ _ -> return True
+        return $ case result of
+            Unsatisfiable _-> Nothing
+            Satisfiable _ _ -> Just $ M.map fromCW $ getModelDictionary result
             Unknown _ _ -> error "Prover returned unknown"
-            ProofError _ xs -> error $ unlines $ "Prover error:" : xs
+            ProofError _ xs -> error $ unlines $ "Prover error:"  : xs
             TimeOut _ -> error "Prover timeout"
 

@@ -7,11 +7,12 @@ import PetriNet
 import Property
 import Solver
 
-checkProperty :: PetriNet -> Property -> IO String
+checkProperty :: PetriNet -> Property -> IO ()
 checkProperty net p = do
         r <- checkSat net p
-        return (if r then "Property not satisfied"
-                     else "Property satisfied")
+        case r of
+            Nothing -> putStrLn "Property satisfied"
+            Just m -> putStrLn "Property not satisfied, model:" >> print m
 
 main :: IO ()
 main = do
@@ -23,7 +24,6 @@ main = do
         putStrLn $ "Analyzing " ++ showName net
         mapM_ (\p -> do
                   putStrLn $ "Checking " ++ show p
-                  r <- checkProperty net p
-                  putStrLn r
+                  checkProperty net p
               ) properties
 
