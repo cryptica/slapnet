@@ -13,8 +13,11 @@ data PetriNet = PetriNet {
         places :: [String],
         transitions :: [String],
         adjacency :: M.Map String ([(String,Integer)], [(String,Integer)]),
-        initial :: [(String,Integer)]
+        initMap :: M.Map String Integer
 }
+
+initial :: PetriNet -> String -> Integer
+initial net p = M.findWithDefault 0 p (initMap net)
 
 context :: PetriNet -> String -> ([(String, Integer)], [(String, Integer)])
 context net x = M.findWithDefault ([],[]) x (adjacency net)
@@ -46,14 +49,15 @@ instance Show PetriNet where
                    "Initial: " ++ unwords
                         (map (\(n,i) -> n ++
                             (if i /= 1 then "[" ++ show i ++ "]" else []))
-                        (initial net))
+                        (M.toList (initMap net)))
 
 makePetriNet :: String -> [String] -> [String] ->
         [(String, String, Integer)] -> [(String, Integer)] -> PetriNet
 makePetriNet name places transitions arcs initial =
         let adjacency = foldl buildMap M.empty arcs
+            initMap = M.fromList initial
         in  PetriNet { name=name, places=places, transitions=transitions,
-                   adjacency=adjacency, initial=initial }
+                   adjacency=adjacency, initMap=initMap }
         where
             buildMap m (l,r,w) =
               let m'  = M.insertWith addArc l ([],[(r,w)]) m
