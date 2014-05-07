@@ -1,20 +1,24 @@
 module Solver
-    (checkSat)
+    (checkSat,checkPropertyConstraintsSat,checkTrapConstraintsSat)
 where
 
 import Data.SBV
 import qualified Data.Map as M
-import Control.Monad (liftM,liftM2)
 
 import PetriNet
 import Property
 
-type Model = M.Map String SInteger
+type ModelSI = M.Map String SInteger
+type ModelSB = M.Map String SBool
+type ModelI = M.Map String Integer
+type ModelB = M.Map String Bool
+type ModelLI = [(String, Integer)]
+type ModelLB = [(String, Bool)]
 
-evaluateTerm :: Model -> Term -> Symbolic SInteger
-evaluateTerm m (Term xs) = liftM sum $ mapM evaluateLinAtom xs
-        where evaluateLinAtom (Var c x) = return $ literal c * m M.! x
-              evaluateLinAtom (Const c) = return $ literal c
+evaluateTerm :: ModelSI -> Term -> SInteger
+evaluateTerm m (Term xs) = sum $ map evaluateLinAtom xs
+        where evaluateLinAtom (Var c x) = literal c * m M.! x
+              evaluateLinAtom (Const c) = literal c
 
 opToFunction :: Op -> SInteger -> SInteger -> SBool
 opToFunction Gt = (.>)
@@ -23,76 +27,102 @@ opToFunction Eq = (.==)
 opToFunction Le = (.<=)
 opToFunction Lt = (.<)
 
-evaluateLinIneq :: Model -> LinearInequation -> Symbolic SBool
+evaluateLinIneq :: ModelSI -> LinearInequation -> SBool
 evaluateLinIneq m (LinIneq lhs op rhs) =
-        liftM2 (opToFunction op) (evaluateTerm m lhs) (evaluateTerm m rhs)
+        opToFunction op (evaluateTerm m lhs) (evaluateTerm m rhs)
 
-evaluateFormula :: Model -> Formula -> Symbolic SBool
+evaluateFormula :: ModelSI -> Formula -> SBool
 evaluateFormula m (Atom a) = evaluateLinIneq m a
-evaluateFormula m (Neg p) = liftM bnot $ evaluateFormula m p
-evaluateFormula m (p :&: q) = do
-        r1 <- evaluateFormula m p
-        r2 <- evaluateFormula m q
-        return $ r1 &&& r2
-evaluateFormula m (p :|: q) = do
-        r1 <- evaluateFormula m p
-        r2 <- evaluateFormula m q
-        return $ r1 ||| r2
+evaluateFormula m (Neg p) = bnot $ evaluateFormula m p
+evaluateFormula m (p :&: q) = evaluateFormula m p &&& evaluateFormula m q
+evaluateFormula m (p :|: q) = evaluateFormula m p ||| evaluateFormula m q
 
-checkNonnegativityConstraints :: Model -> PetriNet -> Symbolic SBool
-checkNonnegativityConstraints m net = do
-            pts <- mapM checkPT $ places net ++ transitions net
-            return $ bAnd pts
-        where checkPT x = return $ (m M.! x) .>= 0
+checkNonnegativityConstraints :: ModelSI -> PetriNet -> SBool
+checkNonnegativityConstraints m net =
+            bAnd $ map checkPT $ places net ++ transitions net
+        where checkPT x = (m M.! x) .>= 0
 
-checkPlaceEquation :: Model -> PetriNet -> String -> Symbolic SBool
-checkPlaceEquation m net p = do
-            incoming <- mapM addTransition $ lpre net p
-            outgoing <- mapM addTransition $ lpost net p
-            let pinit = literal $ initial net p
-            return $ pinit + sum incoming - sum outgoing .== (m M.! p)
-        where addTransition (t,w) = return $ literal w * (m M.! t)
+checkPlaceEquation :: ModelSI -> PetriNet -> String -> SBool
+checkPlaceEquation m net p =
+            let incoming = map addTransition $ lpre net p
+                outgoing = map addTransition $ lpost net p
+                pinit = literal $ initial net p
+            in  pinit + sum incoming - sum outgoing .== (m M.! p)
+        where addTransition (t,w) = literal w * (m M.! t)
 
-checkStateConstraints :: Model -> PetriNet -> Symbolic SBool
-checkStateConstraints m net = do
-        pEquations <- mapM (checkPlaceEquation m net) $ places net
-        return $ bAnd pEquations
+checkStateConstraints :: ModelSI -> PetriNet -> SBool
+checkStateConstraints m net =
+        bAnd $ map (checkPlaceEquation m net) $ places net
 
-checkTransitionEquation :: Model -> PetriNet -> String -> Symbolic SBool
-checkTransitionEquation m net t = do
-            incoming <- mapM addPlace $ lpre net t
-            outgoing <- mapM addPlace $ lpost net t
-            return $ sum outgoing - sum incoming .>= 0
-        where addPlace (p,w) = return $ literal w * (m M.! p)
+checkTransitionEquation :: ModelSI -> PetriNet -> String -> SBool
+checkTransitionEquation m net t =
+            let incoming = map addPlace $ lpre net t
+                outgoing = map addPlace $ lpost net t
+            in  sum outgoing - sum incoming .>= 0
+        where addPlace (p,w) = literal w * (m M.! p)
 
-checkTInvariantConstraints :: Model -> PetriNet -> Symbolic SBool
-checkTInvariantConstraints m net = do
-        tEquations <- mapM (checkTransitionEquation m net) $ transitions net
-        return $ bAnd tEquations
+checkTInvariantConstraints :: ModelSI -> PetriNet -> SBool
+checkTInvariantConstraints m net =
+        bAnd $ map (checkTransitionEquation m net) $ transitions net
 
-buildSymbolicModel :: PetriNet -> Symbolic Model
-buildSymbolicModel net = do
-        let vars = places net ++ transitions net
+checkTrapConstraints :: ModelSB -> PetriNet -> SBool
+checkTrapConstraints m net =
+            bAnd $ map trapConstraint $ transitions net
+        where trapConstraint t =
+                bOr (map (m M.!) $ pre net t) ==> bOr (map (m M.!) $ post net t)
+
+checkTrapMarked :: ModelSB -> PetriNet -> SBool
+checkTrapMarked m net =
+        let marked = map fst $ filter (( > 0) . snd) $ (initials net)
+        in  bOr $ map (m M.!) marked
+
+checkTrapUnassigned :: ModelSB -> ModelI -> SBool
+checkTrapUnassigned mt ma =
+        let assigned = map fst $ filter (( > 0) . snd) $ M.toList ma
+        in  bAnd $ map (bnot . (mt M.!)) assigned
+
+checkAllTrapConstraints :: ModelSB -> ModelI -> PetriNet -> SBool
+checkAllTrapConstraints mt ma net =
+        let tc = checkTrapConstraints mt net
+            tm = checkTrapMarked mt net
+            tu = checkTrapUnassigned mt ma
+        in  tc &&& tm &&& tu
+
+checkPropertyConstraints :: ModelSI -> PetriNet -> Property -> SBool
+checkPropertyConstraints m net p =
+        let netConstraints = case ptype p of
+                  Safety -> checkStateConstraints m net
+                  Liveness -> checkTInvariantConstraints m net
+            nonnegativityConstraint = checkNonnegativityConstraints m net
+            propertyConstraint = evaluateFormula m (pformula p)
+        in  netConstraints &&& nonnegativityConstraint &&& propertyConstraint
+
+symConstraints :: SymWord a => [String] -> ([(String, SBV a)] -> SBool) ->
+        Symbolic SBool
+symConstraints vars constraint = do
         syms <- mapM exists vars
-        return $ M.fromList (vars `zip` syms)
+        return $ constraint (vars `zip` syms)
 
-checkConstraints :: PetriNet -> Property -> Symbolic SBool
-checkConstraints net p = do
-        model <- buildSymbolicModel net
-        r1 <- case ptype p of
-                  Safety -> checkStateConstraints model net
-                  Liveness -> checkTInvariantConstraints model net
-        r2 <- checkNonnegativityConstraints model net
-        r3 <- evaluateFormula model (pformula p)
-        return $ r1 &&& r2 &&& r3
+rebuildModel :: SymWord a => [String] -> Either String (Bool, [a]) -> Maybe [(String,a)]
+rebuildModel _ (Left _) = Nothing
+rebuildModel _ (Right (True, _)) = error "Prover returned unknown"
+rebuildModel vars (Right (False, m)) = Just $ vars `zip` m
 
-checkSat :: PetriNet -> Property -> IO (Maybe (M.Map String Integer))
-checkSat net p = do
-        (SatResult result) <- sat $ checkConstraints net p
-        return $ case result of
-            Unsatisfiable _-> Nothing
-            Satisfiable _ _ -> Just $ M.map fromCW $ getModelDictionary result
-            Unknown _ _ -> error "Prover returned unknown"
-            ProofError _ xs -> error $ unlines $ "Prover error:"  : xs
-            TimeOut _ -> error "Prover timeout"
+checkSat :: (SatModel a, SymWord a) => [String] ->
+        ([(String, SBV a)] -> SBool) -> IO (Maybe [(String,a)])
+checkSat vars constraint = do
+        result <- sat $ symConstraints vars constraint
+        return $ rebuildModel vars $ getModel result
+
+checkPropertyConstraintsSat :: PetriNet -> Property -> IO (Maybe ModelLI)
+checkPropertyConstraintsSat net p =
+        let vars = places net ++ transitions net
+            cons m = checkPropertyConstraints (M.fromList m) net p
+        in  checkSat vars cons
+
+checkTrapConstraintsSat :: PetriNet -> ModelI -> IO (Maybe ModelLB)
+checkTrapConstraintsSat net ma =
+        let vars = transitions net
+            cons m = checkAllTrapConstraints (M.fromList m) ma net
+        in  checkSat vars cons
 

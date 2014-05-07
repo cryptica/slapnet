@@ -9,10 +9,12 @@ import Solver
 
 checkProperty :: PetriNet -> Property -> IO ()
 checkProperty net p = do
-        r <- checkSat net p
+        r <- checkPropertyConstraintsSat net p
         case r of
             Nothing -> putStrLn "Property satisfied"
             Just m -> putStrLn "Property not satisfied, model:" >> print m
+
+--checkPropertyWithTrapRefinement :: PetriNet -> Property -> IO ()
 
 main :: IO ()
 main = do

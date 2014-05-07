@@ -2,7 +2,7 @@
 
 module PetriNet
     (PetriNet,showName,places,transitions,initial,
-     pre,lpre,post,lpost,
+     pre,lpre,post,lpost,initials,
      makePetriNet)
 where
 
@@ -33,6 +33,9 @@ post net = map fst . snd . context net
 
 lpost :: PetriNet -> String -> [(String, Integer)]
 lpost net = snd . context net
+
+initials :: PetriNet -> [(String,Integer)]
+initials net = M.toList (initMap net)
 
 showName :: PetriNet -> String
 showName net = "Petri net" ++
