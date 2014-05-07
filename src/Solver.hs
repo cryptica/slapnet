@@ -11,7 +11,7 @@ import Property
 type ModelSI = M.Map String SInteger
 type ModelSB = M.Map String SBool
 type ModelI = M.Map String Integer
-type ModelB = M.Map String Bool
+--type ModelB = M.Map String Bool
 type ModelLI = [(String, Integer)]
 type ModelLB = [(String, Bool)]
 
@@ -73,20 +73,25 @@ checkTrapConstraints m net =
 
 checkTrapMarked :: ModelSB -> PetriNet -> SBool
 checkTrapMarked m net =
-        let marked = map fst $ filter (( > 0) . snd) $ (initials net)
+        let marked = map fst $ filter (( > 0) . snd) $ initials net
         in  bOr $ map (m M.!) marked
 
-checkTrapUnassigned :: ModelSB -> ModelI -> SBool
-checkTrapUnassigned mt ma =
-        let assigned = map fst $ filter (( > 0) . snd) $ M.toList ma
+checkTrapUnassigned :: ModelSB -> ModelI -> PetriNet -> SBool
+checkTrapUnassigned mt ma net =
+        let assigned = filter (( > 0) . (ma M.!)) $ places net
         in  bAnd $ map (bnot . (mt M.!)) assigned
 
 checkAllTrapConstraints :: ModelSB -> ModelI -> PetriNet -> SBool
 checkAllTrapConstraints mt ma net =
         let tc = checkTrapConstraints mt net
             tm = checkTrapMarked mt net
-            tu = checkTrapUnassigned mt ma
+            tu = checkTrapUnassigned mt ma net
         in  tc &&& tm &&& tu
+
+checkTrapDeltaConstraints :: ModelSI -> [String] -> SBool
+checkTrapDeltaConstraints m trap =
+        let tokens = map (m M.!) trap
+        in  sum tokens .>= 1
 
 checkPropertyConstraints :: ModelSI -> PetriNet -> Property -> SBool
 checkPropertyConstraints m net p =
@@ -96,6 +101,13 @@ checkPropertyConstraints m net p =
             nonnegativityConstraint = checkNonnegativityConstraints m net
             propertyConstraint = evaluateFormula m (pformula p)
         in  netConstraints &&& nonnegativityConstraint &&& propertyConstraint
+
+checkPropertyPlusTrapConstraints :: ModelSI -> PetriNet -> Property ->
+        [[String]] -> SBool
+checkPropertyPlusTrapConstraints m net p traps =
+        let propConstraints = checkPropertyConstraints m net p
+            trapConstraints = map (checkTrapDeltaConstraints m) traps
+        in  propConstraints &&& bAnd trapConstraints
 
 symConstraints :: SymWord a => [String] -> ([(String, SBV a)] -> SBool) ->
         Symbolic SBool
@@ -114,15 +126,15 @@ checkSat vars constraint = do
         result <- sat $ symConstraints vars constraint
         return $ rebuildModel vars $ getModel result
 
-checkPropertyConstraintsSat :: PetriNet -> Property -> IO (Maybe ModelLI)
-checkPropertyConstraintsSat net p =
+checkPropertyConstraintsSat :: PetriNet -> Property -> [[String]] -> IO (Maybe ModelLI)
+checkPropertyConstraintsSat net p traps =
         let vars = places net ++ transitions net
-            cons m = checkPropertyConstraints (M.fromList m) net p
+            cons m = checkPropertyPlusTrapConstraints (M.fromList m) net p traps
         in  checkSat vars cons
 
-checkTrapConstraintsSat :: PetriNet -> ModelI -> IO (Maybe ModelLB)
+checkTrapConstraintsSat :: PetriNet -> ModelLI -> IO (Maybe ModelLB)
 checkTrapConstraintsSat net ma =
-        let vars = transitions net
-            cons m = checkAllTrapConstraints (M.fromList m) ma net
+        let vars = places net
+            cons m = checkAllTrapConstraints (M.fromList m) (M.fromList ma) net
         in  checkSat vars cons
 
