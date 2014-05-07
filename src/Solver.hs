@@ -39,6 +39,12 @@ evaluateFormula m (p :|: q) = do
         r2 <- evaluateFormula m q
         return $ r1 ||| r2
 
+checkNonnegativityConstraints :: Model -> PetriNet -> Symbolic SBool
+checkNonnegativityConstraints m net = do
+            pts <- mapM checkPT $ places net ++ transitions net
+            return $ bAnd pts
+        where checkPT x = return $ (m M.! x) .>= 0
+
 checkPlaceEquation :: Model -> PetriNet -> String -> Symbolic SBool
 checkPlaceEquation m net p = do
             incoming <- mapM addTransition $ lpre net p
@@ -76,8 +82,9 @@ checkConstraints net p = do
         r1 <- case ptype p of
                   Safety -> checkStateConstraints model net
                   Liveness -> checkTInvariantConstraints model net
-        r2 <- evaluateFormula model (pformula p)
-        return $ r1 &&& r2
+        r2 <- checkNonnegativityConstraints model net
+        r3 <- evaluateFormula model (pformula p)
+        return $ r1 &&& r2 &&& r3
 
 checkSat :: PetriNet -> Property -> IO (Maybe (M.Map String Integer))
 checkSat net p = do
