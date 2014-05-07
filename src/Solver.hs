@@ -11,12 +11,10 @@ import Property
 
 type Model = M.Map String SInteger
 
-evaluateLinAtom :: Model -> LinAtom -> Symbolic SInteger
-evaluateLinAtom m (Var c x) = return $ literal c * m M.! x
-evaluateLinAtom _ (Const c) = return $ literal c
-
 evaluateTerm :: Model -> Term -> Symbolic SInteger
-evaluateTerm m (Term xs) = liftM sum $ mapM (evaluateLinAtom m) xs
+evaluateTerm m (Term xs) = liftM sum $ mapM evaluateLinAtom xs
+        where evaluateLinAtom (Var c x) = return $ literal c * m M.! x
+              evaluateLinAtom (Const c) = return $ literal c
 
 opToFunction :: Op -> SInteger -> SInteger -> SBool
 opToFunction Gt = (.>)
@@ -41,6 +39,19 @@ evaluateFormula m (p :|: q) = do
         r2 <- evaluateFormula m q
         return $ r1 ||| r2
 
+checkPlaceEquation :: Model -> PetriNet -> String -> Symbolic SBool
+checkPlaceEquation m net p = do
+            incoming <- mapM addTransition $ lpre net p
+            outgoing <- mapM addTransition $ lpost net p
+            let pinit = literal $ initial net p
+            return $ pinit + sum incoming - sum outgoing .== (m M.! p)
+        where addTransition (t,w) = return $ literal w * (m M.! t)
+
+checkStateConstraints :: Model -> PetriNet -> Symbolic SBool
+checkStateConstraints m net = do
+        placeEquations <- mapM (checkPlaceEquation m net) $ places net
+        return $ bAnd placeEquations
+
 buildModel :: PetriNet -> Symbolic Model
 buildModel net = do
         let vars = places net ++ transitions net
@@ -50,7 +61,9 @@ buildModel net = do
 checkConstraints :: PetriNet -> Property -> Symbolic SBool
 checkConstraints net p = do
         model <- buildModel net
-        evaluateFormula model (pformula p)
+        r1 <- checkStateConstraints model net
+        r2 <- evaluateFormula model (pformula p)
+        return $ r1 &&& r2
 
 checkSat :: PetriNet -> Property -> IO Bool
 checkSat net p = do
