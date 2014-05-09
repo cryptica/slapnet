@@ -2,6 +2,7 @@
 
 module Property
     (Property(..),
+     showPropertyName,
      PropertyType(..),
      Formula(..),
      LinearInequation(..),
@@ -71,3 +72,6 @@ instance Show Property where
             (if null (pname p) then "" else show (pname p) ++ " ") ++
             "{ " ++ show (pformula p) ++ " }"
 
+showPropertyName :: Property -> String
+showPropertyName p = "property" ++
+               (if null (pname p) then "" else " " ++ show (pname p))

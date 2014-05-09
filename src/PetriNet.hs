@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 module PetriNet
-    (PetriNet,showName,places,transitions,initial,
+    (PetriNet,showNetName,places,transitions,initial,
      pre,lpre,post,lpost,initials,
      makePetriNet)
 where
@@ -37,12 +37,12 @@ lpost net = snd . context net
 initials :: PetriNet -> [(String,Integer)]
 initials net = M.toList (initMap net)
 
-showName :: PetriNet -> String
-showName net = "Petri net" ++
+showNetName :: PetriNet -> String
+showNetName net = "Petri net" ++
                (if null (name net) then "" else " " ++ show (name net))
 
 instance Show PetriNet where
-        show net = showName net ++
+        show net = showNetName net ++
                    "\nPlaces: " ++ unwords (places net) ++
                    "\nTransitions: " ++ unwords (transitions net) ++
                    "\nArcs:\n" ++ unlines

@@ -1,6 +1,7 @@
 module Main where
 
 import System.Environment (getArgs)
+import System.Exit
 
 import Parser (parseFile)
 import PetriNet
@@ -52,21 +53,6 @@ checkProperty net p = do
                         else "Property may not be satisfied."
         return r
 
---checkPropertyWithTrapRefinement :: PetriNet -> Property -> [[String]] -> IO ()
---checkPropertyWithTrapRefinement net p traps = do
---        r <- checkPropertyConstraintsSat net p traps
---        case r of
---            Nothing -> putStrLn "Property is satisfied"
---            Just m -> do
---                putStrLn "Property may not satisfied, model:" >> print m
---                r2 <- checkTrapConstraintsSat net m
---                case r2 of
---                    Nothing -> putStrLn "No trap found"
---                    Just m2 -> do
---                        let trap = map fst $ filter snd m2
---                        putStrLn "Trap found:" >> print trap
---                        checkPropertyWithTrapRefinement net p (trap:traps)
-
 main :: IO ()
 main = do
         args <- getArgs
@@ -74,9 +60,13 @@ main = do
         putStrLn "SLAPnet - Safety and Liveness Analysis of Petri Nets with SMT solvers\n"
         putStrLn $ "Reading \"" ++ file ++ "\""
         (net,properties) <- parseFile file
-        putStrLn $ "Analyzing " ++ showName net
-        mapM_ (\p -> do
-                  putStrLn $ "\nChecking " ++ show p
-                  checkProperty net p
-              ) properties
+        putStrLn $ "Analyzing " ++ showNetName net
+        rs <- mapM (\p -> do
+                      putStrLn $ "\nChecking " ++ showPropertyName p
+                      checkProperty net p
+                  ) properties
+        if and rs then
+            exitSuccess
+        else
+            exitWith $ ExitFailure 2
 
