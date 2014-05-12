@@ -11,9 +11,6 @@ import Solver.StateEquation
 import Solver.TransitionInvariant
 import Solver.TrapConstraints
 
--- TODO: check type of property and only do trap refinement for safety
--- properties
-
 checkSafetyProperty :: PetriNet -> Formula -> [[String]] -> IO Bool
 checkSafetyProperty net f traps = do
     r <- checkSat $ checkStateEquationSat net f traps

@@ -26,5 +26,5 @@ checkSat :: (SatModel a, SymWord a) =>
         ([String], M.Map String (SBV a) -> SBool) ->
         IO (Maybe (M.Map String a))
 checkSat (vars, constraint) = do
-        result <- sat $ symConstraints vars constraint
+        result <- satWith z3{verbose=False} $ symConstraints vars constraint
         return $ rebuildModel vars $ getModel result
