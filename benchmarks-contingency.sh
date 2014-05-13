@@ -11,7 +11,7 @@ function sort_file {
   >$1.sorted
 }
 
-results_our_tool=( positive negative dontknow error timeout )
+results_our_tool=( positive dontknow error timeout )
 results_other_tool=( positive negative error timeout )
 
 our_tool=slapnet
