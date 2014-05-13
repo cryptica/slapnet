@@ -21,6 +21,6 @@ executable slapnet
   main-is: Main.hs
   other-modules:
   -- other-extensions:
-  build-depends:       base >=4.6 && <4.7, sbv, parsec, containers
+  build-depends:       base >=4 && <5, sbv, parsec, containers
   hs-source-dirs:      src
   default-language:    Haskell2010
