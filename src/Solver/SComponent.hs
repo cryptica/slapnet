@@ -56,6 +56,11 @@ checkClosed net a m =
               checkTransition (t,t') =
                   mElem m (prime t) &&& mElem m t' ==> mElem m (prime t')
 
+checkTokens :: PetriNet -> ModelSI -> SBool
+checkTokens net m =
+            sum (map addPlace (initials net)) .== 1
+        where addPlace (p,x) = literal x * (m M.! p)
+
 checkBinary :: ModelSI -> SBool
 checkBinary m = bAnd $ map (\x -> x .== 0 ||| x .== 1) $ M.elems m
 
@@ -66,6 +71,7 @@ checkSComponent net fired a m =
         checkSubsetTransitions fired m &&&
         checkNotEmpty fired m &&&
         checkClosed net a m &&&
+        checkTokens net m &&&
         checkBinary m
 
 checkSComponentSat :: PetriNet -> ModelI -> ([String], ModelSI -> SBool)
