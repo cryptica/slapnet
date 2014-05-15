@@ -68,10 +68,8 @@ data Property = Property {
 
 instance Show Property where
         show p =
-            show (ptype p) ++ " property " ++
-            (if null (pname p) then "" else show (pname p) ++ " ") ++
-            "{ " ++ show (pformula p) ++ " }"
+            showPropertyName p ++ " { " ++ show (pformula p) ++ " }"
 
 showPropertyName :: Property -> String
-showPropertyName p = "property" ++
+showPropertyName p = show (ptype p) ++ " property" ++
                (if null (pname p) then "" else " " ++ show (pname p))

@@ -17,7 +17,7 @@ tInvariantConstraints net m =
         where checkTransitionEquation p =
                 let incoming = map addTransition $ lpre net p
                     outgoing = map addTransition $ lpost net p
-                in  sum outgoing - sum incoming .>= 0
+                in  sum incoming - sum outgoing .>= 0
               addTransition (t,w) = literal w * (m M.! t)
 
 finalInvariantConstraints :: ModelSI -> SBool

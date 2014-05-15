@@ -51,7 +51,7 @@ checkLivenessProperty net f = do
 
 checkProperty :: PetriNet -> Property -> IO Bool
 checkProperty net p = do
-        --putStrLn $ "\nChecking " ++ showPropertyName p
+        putStrLn $ "\nChecking " ++ showPropertyName p
         r <- case ptype p of
             Safety -> checkSafetyProperty net (pformula p) []
             Liveness -> checkLivenessProperty net (pformula p)
