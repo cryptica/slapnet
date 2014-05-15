@@ -18,7 +18,6 @@ checkSafetyProperty net f traps = do
         case r of
             Nothing -> return True
             Just a -> do
-                --print a
                 let assigned = markedPlacesFromAssignment net a
                 putStrLn $ "Assignment found marking " ++ show assigned
                 rt <- checkSat $ checkTrapSat net assigned
@@ -52,6 +51,7 @@ checkLivenessProperty net f = do
 
 checkProperty :: PetriNet -> Property -> IO Bool
 checkProperty net p = do
+        --putStrLn $ "\nChecking " ++ showPropertyName p
         r <- case ptype p of
             Safety -> checkSafetyProperty net (pformula p) []
             Liveness -> checkLivenessProperty net (pformula p)
@@ -67,10 +67,7 @@ main = do
         putStrLn $ "Reading \"" ++ file ++ "\""
         (net,properties) <- parseFile file
         putStrLn $ "Analyzing " ++ showNetName net
-        rs <- mapM (\p -> do
-                      putStrLn $ "\nChecking " ++ showPropertyName p
-                      checkProperty net p
-                  ) properties
+        rs <- mapM (checkProperty net) properties
         if and rs then
             exitSuccess
         else
