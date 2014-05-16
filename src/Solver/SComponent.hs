@@ -1,9 +1,11 @@
 module Solver.SComponent
-    (checkSComponent,checkSComponentSat)
+    (checkSComponent,checkSComponentSat,
+     getSComponentInOut)
 where
 
 import Data.SBV
 import qualified Data.Map as M
+import Data.List (partition)
 
 import PetriNet
 import Solver
@@ -11,8 +13,14 @@ import Solver
 mElem :: ModelSI -> String -> SBool
 mElem m x = (m M.! x) .== 1
 
+mElemI :: ModelI -> String -> Bool
+mElemI m x = (m M.! x) == 1
+
 mNotElem :: ModelSI -> String -> SBool
 mNotElem m x = (m M.! x) .== 0
+
+mNotElemI :: ModelI -> String -> Bool
+mNotElemI m x = (m M.! x) == 0
 
 countElem :: ModelSI -> [String] -> SInteger
 countElem m xs = sum $ map (m M.!) xs
@@ -47,12 +55,12 @@ checkNotEmpty :: [String] -> ModelSI -> SBool
 checkNotEmpty fired m = countElem m (map prime fired) .> 0
 
 checkClosed :: PetriNet -> ModelI -> ModelSI -> SBool
-checkClosed net a m =
+checkClosed net ax m =
             bAnd (map checkPlaceClosed (places net))
         where checkPlaceClosed p = mElem m p ==>
                         bAnd (map checkTransition
                              [(t,t') | t <- pre net p, t' <- post net p,
-                                       a M.! t > 0  , a M.! t' > 0 ])
+                                       ax M.! t > 0 , ax M.! t' > 0 ])
               checkTransition (t,t') =
                   mElem m (prime t) &&& mElem m t' ==> mElem m (prime t')
 
@@ -65,17 +73,22 @@ checkBinary :: ModelSI -> SBool
 checkBinary m = bAnd $ map (\x -> x .== 0 ||| x .== 1) $ M.elems m
 
 checkSComponent :: PetriNet -> [String] -> ModelI -> ModelSI -> SBool
-checkSComponent net fired a m =
+checkSComponent net fired ax m =
         checkPrePostPlaces net m &&&
         checkPrePostTransitions net m &&&
         checkSubsetTransitions fired m &&&
         checkNotEmpty fired m &&&
-        checkClosed net a m &&&
+        checkClosed net ax m &&&
         checkTokens net m &&&
         checkBinary m
 
 checkSComponentSat :: PetriNet -> ModelI -> ([String], ModelSI -> SBool)
-checkSComponentSat net a =
-        let fired = M.keys $ M.filter (> 0) a
+checkSComponentSat net ax =
+        let fired = M.keys $ M.filter (> 0) ax
         in  (places net ++ transitions net ++ map prime fired,
-             checkSComponent net fired a)
+             checkSComponent net fired ax)
+
+getSComponentInOut :: PetriNet -> ModelI -> ModelI -> ([String], [String])
+getSComponentInOut net ax as =
+        partition (mElemI ax) $ filter (mElemI as) (transitions net)
+

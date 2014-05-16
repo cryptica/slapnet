@@ -3,6 +3,7 @@ module Main where
 import System.Environment (getArgs)
 import System.Exit
 
+import qualified Data.Map as M
 import Parser (parseFile)
 import PetriNet
 import Property
@@ -30,31 +31,31 @@ checkSafetyProperty net f traps = do
                         putStrLn $ "Trap found with places " ++ show trap
                         checkSafetyProperty net f (trap:traps)
 
-checkLivenessProperty :: PetriNet -> Formula -> IO Bool
-checkLivenessProperty net f = do
-        r <- checkSat $ checkTransitionInvariantSat net f
+checkLivenessProperty :: PetriNet -> Formula -> [([String],[String])] -> IO Bool
+checkLivenessProperty net f strans = do
+        r <- checkSat $ checkTransitionInvariantSat net f strans
         case r of
             Nothing -> return True
-            Just a -> do
-                let fired = firedTransitionsFromAssignment a
+            Just ax -> do
+                let fired = firedTransitionsFromAssignment ax
                 putStrLn $ "Assignment found firing " ++ show fired
-                rt <- checkSat $ checkSComponentSat net a
+                rt <- checkSat $ checkSComponentSat net ax
                 case rt of
                     Nothing -> do
                         putStrLn "No S-component found"
                         return False
-                    Just at -> do
-                        --let trap = trapFromAssignment at
-                        putStrLn $ "S-component found: " ++ show at
-                        -- checkLivenessProperty net f (trap:traps)
-                        return False
+                    Just as -> do
+                        let sOutIn = getSComponentInOut net ax as
+                        putStrLn $ "S-component found: " ++ show (M.filter (> 0) as)
+                        putStrLn $ "Out/In: " ++ show sOutIn
+                        checkLivenessProperty net f (sOutIn:strans)
 
 checkProperty :: PetriNet -> Property -> IO Bool
 checkProperty net p = do
         putStrLn $ "\nChecking " ++ showPropertyName p
         r <- case ptype p of
             Safety -> checkSafetyProperty net (pformula p) []
-            Liveness -> checkLivenessProperty net (pformula p)
+            Liveness -> checkLivenessProperty net (pformula p) []
         putStrLn $ if r then "Property is satisfied."
                         else "Property may not be satisfied."
         return r
