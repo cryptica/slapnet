@@ -3,14 +3,13 @@ module Solver.Formula
 where
 
 import Data.SBV
-import qualified Data.Map as M
 
 import Property
 import Solver
 
 evaluateTerm :: Term -> ModelSI -> SInteger
 evaluateTerm (Term xs) m = sum $ map evaluateLinAtom xs
-        where evaluateLinAtom (Var c x) = literal c * m M.! x
+        where evaluateLinAtom (Var c x) = literal c * mVal m x
               evaluateLinAtom (Const c) = literal c
 
 opToFunction :: Op -> SInteger -> SInteger -> SBool

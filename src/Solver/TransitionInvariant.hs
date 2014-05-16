@@ -4,7 +4,6 @@ module Solver.TransitionInvariant
 where
 
 import Data.SBV
-import qualified Data.Map as M
 
 import PetriNet
 import Property
@@ -18,19 +17,19 @@ tInvariantConstraints net m =
                 let incoming = map addTransition $ lpre net p
                     outgoing = map addTransition $ lpost net p
                 in  sum incoming - sum outgoing .>= 0
-              addTransition (t,w) = literal w * (m M.! t)
+              addTransition (t,w) = literal w * mVal m t
 
 finalInvariantConstraints :: ModelSI -> SBool
-finalInvariantConstraints m = sum (M.elems m) .> 0
+finalInvariantConstraints m = sum (mValues m) .> 0
 
 nonnegativityConstraints :: ModelSI -> SBool
-nonnegativityConstraints m = bAnd $ map (.>= 0) $ M.elems m
+nonnegativityConstraints m = bAnd $ map (.>= 0) $ mValues m
 
 checkSComponentTransitions :: [([String],[String])] -> ModelSI -> SBool
 checkSComponentTransitions strans m = bAnd $ map checkInOut strans
         where checkInOut (sOut,sIn) =
-                bAnd (map (\t -> m M.! t .> 0) sOut) ==>
-                bOr (map (\t -> m M.! t .> 0) sIn)
+                bAnd (map (\t -> mVal m t .> 0) sOut) ==>
+                bOr (map (\t -> mVal m t .> 0) sIn)
 
 checkTransitionInvariant :: PetriNet -> Formula -> [([String],[String])] ->
         ModelSI -> SBool
@@ -47,4 +46,4 @@ checkTransitionInvariantSat net f strans =
         (transitions net, checkTransitionInvariant net f strans)
 
 firedTransitionsFromAssignment :: ModelI -> [String]
-firedTransitionsFromAssignment a = M.keys $ M.filter ( > 0) a
+firedTransitionsFromAssignment = mElemsWith (> 0)

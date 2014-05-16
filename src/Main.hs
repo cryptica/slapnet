@@ -3,7 +3,6 @@ module Main where
 import System.Environment (getArgs)
 import System.Exit
 
-import qualified Data.Map as M
 import Parser (parseFile)
 import PetriNet
 import Property
@@ -39,14 +38,14 @@ checkLivenessProperty net f strans = do
             Just ax -> do
                 let fired = firedTransitionsFromAssignment ax
                 putStrLn $ "Assignment found firing " ++ show fired
-                rt <- checkSat $ checkSComponentSat net ax
+                rt <- checkSat $ checkSComponentSat net fired ax
                 case rt of
                     Nothing -> do
                         putStrLn "No S-component found"
                         return False
                     Just as -> do
                         let sOutIn = getSComponentInOut net ax as
-                        putStrLn $ "S-component found: " ++ show (M.filter (> 0) as)
+                        putStrLn $ "S-component found: " ++ show (mElemsWith (> 0) as)
                         putStrLn $ "Out/In: " ++ show sOutIn
                         checkLivenessProperty net f (sOutIn:strans)
 
