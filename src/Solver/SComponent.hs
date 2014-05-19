@@ -46,7 +46,7 @@ checkClosed net ax m =
                              [(t,t') | t <- pre net p, t' <- post net p,
                                        cElem ax t, cElem ax t' ])
               checkTransition (t,t') =
-                  mElem m (prime t) &&& mElem m t' ==> mElem m (prime t')
+                  mElem m (prime t) ==> mElem m (prime t')
 
 checkTokens :: PetriNet -> ModelSI -> SBool
 checkTokens net m =
