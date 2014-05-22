@@ -1,0 +1,36 @@
+petri net "Lamport's algorithm" {
+    places {
+        p1 p2 p3       b1 nb1
+        q1 q2 q3 q4 q5 b2 nb2
+    }
+    transitions {
+        s1 s2 s3 s4
+        t1 t2 t3 t4 t5 t6 t7
+    }
+    arcs {
+        { p1, nb1 } -> s1 -> { p2,  b1 }
+        { p2,  b2 } -> s2 -> { p2,  b2 }
+        { p2, nb2 } -> s3 -> { p3, nb2 }
+        { p3,  b1 } -> s4 -> { p1, nb1 }
+
+        { q1, nb2 } -> t1 -> { q2,  b2 }
+        { q2,  b1 } -> t2 -> { q3,  b1 }
+        { q3,  b2 } -> t3 -> { q4, nb2 }
+        { q4, nb1 } -> t4 -> { q1, nb1 }
+        { q4,  b1 } -> t5 -> { q4,  b1 }
+        { q2, nb1 } -> t6 -> { q5, nb1 }
+        { q5,  b2 } -> t7 -> { q1, nb2 }
+    }
+    initial {
+        p1 q1 nb1 nb2
+    }
+}
+liveness property "fairness for first process" {
+    s1 + s2 > 0 && s3 = 0 && t6 >= 1
+}
+liveness property "fairness for second process" {
+    t1 + t2 + t3 + t4 > 0 && t6 = 0 && s3 >= 1
+}
+safety property "mutual exclusion" {
+    p3 >= 1 && q5 >= 1
+}
