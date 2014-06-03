@@ -16,7 +16,7 @@ type ModelI = Model Integer
 type ModelB = Model Bool
 
 mVal :: Model a -> String -> a
-mVal m x = getMap m M.! x
+mVal m x = M.findWithDefault (error ("key not found: " ++ x)) x (getMap m)
 
 mValues :: Model a -> [a]
 mValues m = M.elems $ getMap m
