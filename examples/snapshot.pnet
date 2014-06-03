@@ -32,5 +32,5 @@ petri net "snapshot 2" {
     }
 }
 liveness property {
-    init2 = 0
+    snapshot = 0
 }
