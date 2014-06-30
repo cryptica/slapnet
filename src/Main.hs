@@ -10,7 +10,8 @@ import Control.Monad
 import Control.Applicative
 import Data.Char (toUpper)
 
-import Parser (parseFile)
+import Parser
+import qualified Parser.PNET as PNET
 import PetriNet
 import Property
 import Solver
@@ -66,16 +67,16 @@ parseArgs = do
                 return $ (,files) <$> foldl (>>=) (return startOptions) actions
             (_, _, errs) -> return $ Left $ concat errs
 
-checkFile :: Options -> String -> IO Bool
-checkFile opts file = do
+checkFile :: Parser (PetriNet,[Property]) -> Bool -> String -> IO Bool
+checkFile parser verbose file = do
         putStrLn $ "Reading \"" ++ file ++ "\""
-        (net,properties) <- parseFile file
+        (net,properties) <- parseFile parser file
         putStrLn $ "Analyzing " ++ showNetName net
-        when (optVerbose opts) (do
+        when verbose (do
                 putStrLn $ "Places: " ++ show (length  $ places net)
                 putStrLn $ "Transitions: " ++ show (length $ transitions net)
             )
-        rs <- mapM (checkProperty (optVerbose opts) net) properties
+        rs <- mapM (checkProperty verbose net) properties
         putStrLn ""
         return $ and rs
 
@@ -141,7 +142,11 @@ main = do
                 when (optShowHelp opts) (exitSuccessWith
                      (usageInfo "SLAPnet" options))
                 when (null files) (exitErrorWith "No input file given")
-                rs <- mapM (checkFile opts) files
+                let parser = case inputFormat opts of
+                                 PNET -> PNET.parseContent
+                                 LOLA -> error "lola is not supported yet"
+                                 TPN -> error "tpn is not supported yet"
+                rs <- mapM (checkFile parser (optVerbose opts)) files
                 if and rs then
                     exitSuccessWith "All properties satisfied."
                 else
