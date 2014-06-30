@@ -1,6 +1,6 @@
 module Solver.SComponent
     (checkSComponent,checkSComponentSat,
-     getSComponentInOut)
+     getSComponentOutIn)
 where
 
 import Data.SBV
@@ -71,7 +71,7 @@ checkSComponentSat net fired ax =
         (places net ++ transitions net ++ map prime fired,
          checkSComponent net fired ax)
 
-getSComponentInOut :: PetriNet -> ModelI -> ModelI -> ([String], [String])
-getSComponentInOut net ax as =
+getSComponentOutIn :: PetriNet -> ModelI -> ModelI -> ([String], [String])
+getSComponentOutIn net ax as =
         partition (cElem ax) $ filter (cElem as) (transitions net)
 

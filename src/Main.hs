@@ -124,7 +124,7 @@ checkLivenessProperty verbose net f strans = do
                         putStrLn "No S-component found"
                         return False
                     Just as -> do
-                        let sOutIn = getSComponentInOut net ax as -- TODO rename InOut to OutIn
+                        let sOutIn = getSComponentOutIn net ax as
                         putStrLn "S-component found"
                         when verbose (putStrLn $ "Out/In: " ++ show sOutIn)
                         checkLivenessProperty verbose net f (sOutIn:strans)
