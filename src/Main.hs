@@ -26,6 +26,7 @@ data Options = Options { inputFormat :: InputFormat
                        , optVerbose :: Bool
                        , optShowHelp :: Bool
                        , optShowVersion :: Bool
+                       , proveTermination :: Bool
                        }
 
 startOptions :: Options
@@ -33,6 +34,7 @@ startOptions = Options { inputFormat = PNET
                        , optVerbose = False
                        , optShowHelp = False
                        , optShowVersion = False
+                       , proveTermination = False
                        }
 
 options :: [ OptDescr (Options -> Either String Options) ]
@@ -45,6 +47,10 @@ options =
         "FORMAT")
         ("Input format (possible values=\"pnet\", \"lola\", \"tpn\"\n" ++
          "              default=\"pnet\")")
+
+        , Option "" ["termination"]
+        (NoArg (\opt -> Right opt { proveTermination = True }))
+        "Prove termination"
 
         , Option "v" ["verbose"]
         (NoArg (\opt -> Right opt { optVerbose = True }))
@@ -67,8 +73,9 @@ parseArgs = do
                 return $ (,files) <$> foldl (>>=) (return startOptions) actions
             (_, _, errs) -> return $ Left $ concat errs
 
-checkFile :: Parser (PetriNet,[Property]) -> Bool -> String -> IO Bool
-checkFile parser verbose file = do
+checkFile :: Parser (PetriNet,[Property]) -> Bool -> [Property] ->
+            String -> IO Bool
+checkFile parser verbose addedProperties file = do
         putStrLn $ "Reading \"" ++ file ++ "\""
         (net,properties) <- parseFile parser file
         putStrLn $ "Analyzing " ++ showNetName net
@@ -76,7 +83,7 @@ checkFile parser verbose file = do
                 putStrLn $ "Places: " ++ show (length  $ places net)
                 putStrLn $ "Transitions: " ++ show (length $ transitions net)
             )
-        rs <- mapM (checkProperty verbose net) properties
+        rs <- mapM (checkProperty verbose net) (addedProperties ++ properties)
         putStrLn ""
         return $ and rs
 
@@ -146,7 +153,9 @@ main = do
                                  PNET -> PNET.parseContent
                                  LOLA -> error "lola is not supported yet"
                                  TPN -> error "tpn is not supported yet"
-                rs <- mapM (checkFile parser (optVerbose opts)) files
+                let properties = [ Property "termination" Liveness FTrue
+                                 | proveTermination opts ]
+                rs <- mapM (checkFile parser (optVerbose opts) properties) files
                 if and rs then
                     exitSuccessWith "All properties satisfied."
                 else
