@@ -40,7 +40,8 @@ data LinearInequation = LinIneq Term Op Term
 instance Show LinearInequation where
         show (LinIneq lhs op rhs) = show lhs ++ " " ++ show op ++ " " ++ show rhs
 
-data Formula = Atom LinearInequation
+data Formula = FTrue | FFalse
+             | Atom LinearInequation
              | Neg Formula
              | Formula :&: Formula
              | Formula :|: Formula
@@ -49,6 +50,8 @@ infixr 3 :&:
 infixr 2 :|:
 
 instance Show Formula where
+        show FTrue = "true"
+        show FFalse = "false"
         show (Atom a) = show a
         show (Neg p) = "¬" ++ "(" ++ show p ++ ")"
         show (p :&: q) = "(" ++ show p ++ " ∧ " ++ show q ++ ")"

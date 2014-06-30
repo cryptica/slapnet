@@ -24,6 +24,8 @@ evaluateLinIneq (LinIneq lhs op rhs) m =
         opToFunction op (evaluateTerm lhs m) (evaluateTerm rhs m)
 
 evaluateFormula :: Formula -> ModelSI -> SBool
+evaluateFormula FTrue _ = true
+evaluateFormula FFalse _ = false
 evaluateFormula (Atom a) m = evaluateLinIneq a m
 evaluateFormula (Neg p) m = bnot $ evaluateFormula p m
 evaluateFormula (p :&: q) m = evaluateFormula p m &&& evaluateFormula q m

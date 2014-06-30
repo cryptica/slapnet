@@ -19,7 +19,7 @@ languageDef =
                  Token.commentLine     = "//",
                  Token.identStart      = letter <|> char '_',
                  Token.identLetter     = alphaNum <|> char '_',
-                 Token.reservedNames   = [],
+                 Token.reservedNames   = ["true", "false"],
                  Token.reservedOpNames = ["->", "<", "<=", "=", ">=", ">",
                                           "+", "-", "*", "&&", "||", "!"]
                  }
@@ -142,12 +142,17 @@ parseOp = (reservedOp "<" *> return Lt) <|>
           (reservedOp ">" *> return Gt) <|>
           (reservedOp ">=" *> return Ge)
 
-atom :: Parser Formula
-atom = do
+linIneq :: Parser Formula
+linIneq = do
         lhs <- term
         op <- parseOp
         rhs <- term
         return (Atom (LinIneq lhs op rhs))
+
+atom :: Parser Formula
+atom = (reserved "true" *> return FTrue) <|>
+       (reserved "false" *> return FFalse) <|>
+       linIneq
 
 parensForm :: Parser Formula
 parensForm = atom <|> parens formula
