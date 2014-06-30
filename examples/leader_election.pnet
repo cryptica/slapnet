@@ -1,7 +1,7 @@
 petri net "leader election 2" {
     places {
-        s1 s1x1 s1x2
-        s2 s2x1 s2x2
+        s1 s1m1 s1m2
+        s2 s2m1 s2m2
         lead
     }
     transitions {
@@ -10,12 +10,12 @@ petri net "leader election 2" {
         newleader
     }
     arcs {
-        s1   -> s1send1    -> s1x1
-        s2   -> s2send2    -> s2x2
-        s1x1 -> s2discard1
-        s1x2 -> s2accept2  -> lead
-        s2x1 -> s1accept1  -> lead
-        s2x2 -> s1pass2    -> s1x2
+        s1   -> s1send1    -> s1m1
+        s2   -> s2send2    -> s2m2
+        s1m1 -> s2discard1
+        s1m2 -> s2accept2  -> lead
+        s2m1 -> s1accept1  -> lead
+        s2m2 -> s1pass2    -> s1m2
         lead -> newleader  -> { s1 s2 }
     }
     initial { s1 s2 }

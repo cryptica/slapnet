@@ -1,0 +1,162 @@
+petri net "leader election nlogn 2" {
+    places {
+        a0 a1 a2 aH aP
+        amax_1 amax_2
+        aleft_0 aleft_1 aleft_2
+        am_1_n am_1_1 am_1_2 am_2_n am_2_1 am_2_2
+
+        b0 b1 b2 bH bP
+        bmax_1 bmax_2
+        bleft_0 bleft_1 bleft_2
+        bm_1_n bm_1_1 bm_1_2 bm_2_n bm_2_1 bm_2_2
+
+        aD bD
+    }
+    transitions {
+        a0send1
+        a0send2
+
+        a1rec1max1
+        a1rec2max2
+        a1rec2max1left0
+        a1rec1max2left0
+        a1rec2max1left1
+        a1rec1max2left1
+        a1rec2max1left2
+        a1rec1max2left2
+
+        a2rec1left0
+        a2rec2left0
+        a2rec1left1
+        a2rec2left1
+        a2rec2left2
+        a2rec1max1left2
+        a2rec1max2left2
+
+        aPrec1_1
+        aPrec1_2
+        aPrec2_1
+        aPrec2_2
+
+        b0send1
+        b0send2
+
+        b1rec1max1
+        b1rec2max2
+        b1rec2max1left0
+        b1rec1max2left0
+        b1rec2max1left1
+        b1rec1max2left1
+        b1rec2max1left2
+        b1rec1max2left2
+
+        b2rec1left0
+        b2rec2left0
+        b2rec1left1
+        b2rec2left1
+        b2rec2left2
+        b2rec1max1left2
+        b2rec1max2left2
+
+        bPrec1_1
+        bPrec1_2
+        bPrec2_1
+        bPrec2_2
+
+        aDone
+        bDone
+        aDmax1left0
+        aDmax2left0
+        aDmax1left1
+        aDmax2left1
+        aDmax1left2
+        aDmax2left2
+        bDmax1left0
+        bDmax2left0
+        bDmax1left1
+        bDmax2left1
+        bDmax1left2
+        bDmax2left2
+    }
+    arcs {
+        { a0 amax_1 am_1_n } -> a0send1 -> { a1 amax_1 am_1_1 }
+        { a0 amax_2 am_1_n } -> a0send2 -> { a1 amax_1 am_1_2 }
+
+        { a1 amax_1 bm_1_1 am_2_n } -> a1rec1max1 -> { aH amax_1 bm_1_n }
+        { a1 amax_2 bm_1_2 am_2_n } -> a1rec2max2 -> { aH amax_2 bm_1_n }
+        { a1 amax_2 aleft_0 bm_1_1 am_2_n } -> a1rec1max2left0 -> { a2 amax_2 aleft_1 bm_1_n am_2_1 }
+        { a1 amax_1 aleft_0 bm_1_2 am_2_n } -> a1rec2max1left0 -> { a2 amax_1 aleft_2 bm_1_n am_2_2 }
+        { a1 amax_2 aleft_1 bm_1_1 am_2_n } -> a1rec1max2left1 -> { a2 amax_2 aleft_1 bm_1_n am_2_1 }
+        { a1 amax_1 aleft_1 bm_1_2 am_2_n } -> a1rec2max1left1 -> { a2 amax_1 aleft_2 bm_1_n am_2_2 }
+        { a1 amax_2 aleft_2 bm_1_1 am_2_n } -> a1rec1max2left2 -> { a2 amax_2 aleft_1 bm_1_n am_2_1 }
+        { a1 amax_1 aleft_2 bm_1_2 am_2_n } -> a1rec2max1left2 -> { a2 amax_1 aleft_2 bm_1_n am_2_2 }
+
+        { a2 aleft_0 bm_2_1 } -> a2rec1left0 -> { aP aleft_0 bm_2_n }
+        { a2 aleft_0 bm_2_2 } -> a2rec2left0 -> { aP aleft_0 bm_2_n }
+        { a2 aleft_1 bm_2_1 } -> a2rec1left1 -> { aP aleft_1 bm_2_n }
+        { a2 aleft_1 bm_2_2 } -> a2rec2left1 -> { aP aleft_1 bm_2_n }
+        { a2 aleft_2 bm_2_2 } -> a2rec2left2 -> { aP aleft_2 bm_2_n }
+        { a2 amax_1 aleft_2 bm_2_2 am_1_n } -> a2rec1max1left2 -> { a1 amax_2 aleft_2 bm_1_n am_1_1 }
+        { a2 amax_2 aleft_2 bm_2_1 } -> a2rec1max2left2 -> { aP amax_2 aleft_2 bm_2_n }
+
+        { aP bm_1_1 am_1_n } -> aPrec1_1 -> { aP bm_1_n am_1_1 }
+        { aP bm_1_2 am_1_n } -> aPrec1_2 -> { aP bm_1_n am_1_2 }
+        { aP bm_2_1 am_2_n } -> aPrec2_1 -> { aP bm_1_n am_2_1 }
+        { aP bm_2_2 am_2_n } -> aPrec2_2 -> { aP bm_1_n am_2_2 }
+
+
+        { b0 bmax_1 bm_1_n } -> b0send1 -> { b1 bmax_1 bm_1_1 }
+        { b0 bmax_2 bm_1_n } -> b0send2 -> { b1 bmax_1 bm_1_2 }
+
+        { b1 bmax_1 am_1_1 bm_2_n } -> b1rec1max1 -> { bH bmax_1 am_1_n }
+        { b1 bmax_2 am_1_2 bm_2_n } -> b1rec2max2 -> { bH bmax_2 am_1_n }
+        { b1 bmax_2 bleft_0 am_1_1 bm_2_n } -> b1rec1max2left0 -> { b2 bmax_2 bleft_1 am_1_n bm_2_1 }
+        { b1 bmax_1 bleft_0 am_1_2 bm_2_n } -> b1rec2max1left0 -> { b2 bmax_1 bleft_2 am_1_n bm_2_2 }
+        { b1 bmax_2 bleft_1 am_1_1 bm_2_n } -> b1rec1max2left1 -> { b2 bmax_2 bleft_1 am_1_n bm_2_1 }
+        { b1 bmax_1 bleft_1 am_1_2 bm_2_n } -> b1rec2max1left1 -> { b2 bmax_1 bleft_2 am_1_n bm_2_2 }
+        { b1 bmax_2 bleft_2 am_1_1 bm_2_n } -> b1rec1max2left2 -> { b2 bmax_2 bleft_1 am_1_n bm_2_1 }
+        { b1 bmax_1 bleft_2 am_1_2 bm_2_n } -> b1rec2max1left2 -> { b2 bmax_1 bleft_2 am_1_n bm_2_2 }
+
+        { b2 bleft_0 am_2_1 } -> b2rec1left0 -> { bP bleft_0 am_2_n }
+        { b2 bleft_0 am_2_2 } -> b2rec2left0 -> { bP bleft_0 am_2_n }
+        { b2 bleft_1 am_2_1 } -> b2rec1left1 -> { bP bleft_1 am_2_n }
+        { b2 bleft_1 am_2_2 } -> b2rec2left1 -> { bP bleft_1 am_2_n }
+        { b2 bleft_2 am_2_2 } -> b2rec2left2 -> { bP bleft_2 am_2_n }
+        { b2 bmax_1 bleft_2 am_2_2 bm_1_n } -> b2rec1max1left2 -> { b1 bmax_2 bleft_2 am_1_n bm_1_1 }
+        { b2 bmax_2 bleft_2 am_2_1 } -> b2rec1max2left2 -> { bP bmax_2 bleft_2 am_2_n }
+
+        { bP am_1_1 bm_1_n } -> bPrec1_1 -> { bP am_1_n bm_1_1 }
+        { bP am_1_2 bm_1_n } -> bPrec1_2 -> { bP am_1_n bm_1_2 }
+        { bP am_2_1 bm_2_n } -> bPrec2_1 -> { bP am_1_n bm_2_1 }
+        { bP am_2_2 bm_2_n } -> bPrec2_2 -> { bP am_1_n bm_2_2 }
+
+
+        { aH bP } -> aDone -> { aD bD }
+        { aP bH } -> bDone -> { aD bD }
+        { aD amax_1 aleft_0 } -> aDmax1left0 -> { a0 amax_1 aleft_0 }
+        { aD amax_2 aleft_0 } -> aDmax2left0 -> { a0 amax_1 aleft_0 }
+        { aD amax_1 aleft_1 } -> aDmax1left1 -> { a0 amax_1 aleft_0 }
+        { aD amax_2 aleft_1 } -> aDmax2left1 -> { a0 amax_1 aleft_0 }
+        { aD amax_1 aleft_2 } -> aDmax1left2 -> { a0 amax_1 aleft_0 }
+        { aD amax_2 aleft_2 } -> aDmax2left2 -> { a0 amax_1 aleft_0 }
+        { bD bmax_1 bleft_0 } -> bDmax1left0 -> { b0 bmax_1 bleft_0 }
+        { bD bmax_2 bleft_0 } -> bDmax2left0 -> { b0 bmax_1 bleft_0 }
+        { bD bmax_1 bleft_1 } -> bDmax1left1 -> { b0 bmax_1 bleft_0 }
+        { bD bmax_2 bleft_1 } -> bDmax2left1 -> { b0 bmax_1 bleft_0 }
+        { bD bmax_1 bleft_2 } -> bDmax1left2 -> { b0 bmax_1 bleft_0 }
+        { bD bmax_2 bleft_2 } -> bDmax2left2 -> { b0 bmax_1 bleft_0 }
+    }
+    initial { a0 aleft_0 amax_1 am_1_n am_2_n b0 bleft_0 bmax_2 bm_1_n bm_2_n }
+}
+safety property "passive" {
+    aP >= 1 && bP >= 1
+}
+safety property "halt" {
+    aH >= 1 && bH >= 1
+}
+liveness property {
+    //(aPrec1_2 + bPrec1_2 <= 1) &&
+    //(aPrec1_1 + bPrec1_1 <= 1) &&
+    aDone = 0 && bDone = 0
+}
+
