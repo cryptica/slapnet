@@ -8,7 +8,6 @@ import System.IO
 import System.Console.GetOpt
 import Control.Monad
 import Control.Applicative
-import Data.Char (toUpper)
 
 import Parser
 import qualified Parser.PNET as PNET
@@ -40,14 +39,17 @@ startOptions = Options { inputFormat = PNET
 
 options :: [ OptDescr (Options -> Either String Options) ]
 options =
-        [ Option "f" ["format"]
-        (ReqArg (\arg opt ->
-            case reads (map toUpper arg) of
-                [(format, "")] -> Right opt { inputFormat = format }
-                _ -> Left ("invalid input format `" ++ arg ++ "'\n"))
-        "FORMAT")
-        ("Input format (possible values=\"pnet\", \"lola\", \"tpn\"\n" ++
-         "              default=\"pnet\")")
+        [ Option "" ["pnet"]
+        (NoArg (\opt -> Right opt { inputFormat = PNET }))
+        "Use the pnet input format"
+
+        , Option "" ["lola"]
+        (NoArg (\opt -> Right opt { inputFormat = LOLA }))
+        "Use the lola input format"
+
+        , Option "" ["tpn"]
+        (NoArg (\opt -> Right opt { inputFormat = TPN }))
+        "Use the tpn input format"
 
         , Option "" ["termination"]
         (NoArg (\opt -> Right opt { proveTermination = True }))
