@@ -12,6 +12,7 @@ import Data.Char (toUpper)
 
 import Parser
 import qualified Parser.PNET as PNET
+import qualified Parser.TPN as TPN
 import PetriNet
 import Property
 import Solver
@@ -152,7 +153,7 @@ main = do
                 let parser = case inputFormat opts of
                                  PNET -> PNET.parseContent
                                  LOLA -> error "lola is not supported yet"
-                                 TPN -> error "tpn is not supported yet"
+                                 TPN -> TPN.parseContent
                 let properties = [ Property "termination" Liveness FTrue
                                  | proveTermination opts ]
                 rs <- mapM (checkFile parser (optVerbose opts) properties) files
