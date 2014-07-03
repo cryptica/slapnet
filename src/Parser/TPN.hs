@@ -10,7 +10,7 @@ import qualified Text.Parsec.Token as Token
 import Data.List (group,sort,genericLength)
 
 import Parser
-import PetriNet (PetriNet,makePetriNet)
+import PetriNet (PetriNet,makePetriNetWithTrans)
 import Property
 
 languageDef :: LanguageDef ()
@@ -40,7 +40,7 @@ reservedOp = Token.reservedOp lexer -- parses an operator
 natural :: Parser Integer
 natural    = Token.natural    lexer -- parses a natural number
 semi :: Parser String
-semi       = Token.semi       lexer -- parses a semicolonü
+semi       = Token.semi       lexer -- parses a semicolon
 whiteSpace :: Parser ()
 whiteSpace = Token.whiteSpace lexer -- parses whitespace
 
@@ -76,11 +76,8 @@ petriNet = do
         ps <- many place
         ts <- many transition
         let places = [ p | (p,_) <- ps ]
-            transitions = [ t | (t,_,_) <- ts ]
             initial = [ (p,i) | (p,Just i) <- ps ]
-            arcs = [ (i,t,w) | (t,is,_) <- ts, (i,w) <- is ] ++
-                   [ (t,o,w) | (t,_,os) <- ts, (o,w) <- os ]
-        return $ makePetriNet "" places transitions arcs initial
+        return $ makePetriNetWithTrans "" places ts initial
 
 parseContent :: Parser (PetriNet,[Property])
 parseContent = do

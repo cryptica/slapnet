@@ -3,7 +3,7 @@
 module PetriNet
     (PetriNet,showNetName,places,transitions,initial,
      pre,lpre,post,lpost,initials,
-     makePetriNet)
+     makePetriNet,makePetriNetWithTrans)
 where
 
 import qualified Data.Map as M
@@ -68,3 +68,11 @@ makePetriNet name places transitions arcs initial =
               in  m''
             addArc (lNew,rNew) (lOld,rOld) = (lNew ++ lOld,rNew ++ rOld)
 
+makePetriNetWithTrans :: String -> [String] ->
+        [(String, [(String, Integer)], [(String, Integer)])] ->
+        [(String, Integer)] -> PetriNet
+makePetriNetWithTrans name places ts initial =
+        let transitions = [ t | (t,_,_) <- ts ]
+            arcs = [ (i,t,w) | (t,is,_) <- ts, (i,w) <- is ] ++
+                   [ (t,o,w) | (t,_,os) <- ts, (o,w) <- os ]
+        in  makePetriNet name places transitions arcs initial

@@ -11,6 +11,7 @@ import Control.Applicative
 
 import Parser
 import qualified Parser.PNET as PNET
+import qualified Parser.LOLA as LOLA
 import qualified Parser.TPN as TPN
 import PetriNet
 import Property
@@ -83,6 +84,7 @@ checkFile parser verbose addedProperties file = do
         (net,properties) <- parseFile parser file
         putStrLn $ "Analyzing " ++ showNetName net
         when verbose (do
+                print net
                 putStrLn $ "Places: " ++ show (length  $ places net)
                 putStrLn $ "Transitions: " ++ show (length $ transitions net)
             )
@@ -154,7 +156,7 @@ main = do
                 when (null files) (exitErrorWith "No input file given")
                 let parser = case inputFormat opts of
                                  PNET -> PNET.parseContent
-                                 LOLA -> error "lola is not supported yet"
+                                 LOLA -> LOLA.parseContent
                                  TPN -> TPN.parseContent
                 let properties = [ Property "termination" Liveness FTrue
                                  | proveTermination opts ]
