@@ -49,7 +49,7 @@ def make_net(n,order):
         for j in range(1,n+1):
             print('    ', end='')
             for left in range(0,n+1):
-                if left <= 1:
+                if left <= j:
                     print('s%ia2rec%ileft%i ' % (i,j,left), end='')
                 else:
                     for vmax in range(1,n+1):
@@ -88,14 +88,14 @@ def make_net(n,order):
         print()
         for j in range(1,n+1):
             for left in range(0,n+1):
-                if left <= 1:
+                if left <= j:
                     print('    { s%ia2 s%ileft%i s%im2_%i } -> s%ia2rec%ileft%i -> { s%iaP s%ileft%i s%im2_n }' % (i,i,left,previous(i),j,i,j,left,i,i,left,previous(i)))
                 else:
                     for vmax in range(1,n+1):
-                        if left > j and left > vmax:
-                            print('    { s%ia2 s%imax%i s%ileft%i s%im2_%i s%im1_n } -> s%ia2rec%imax%ileft%i -> { s%ia1 s%imax%i s%ileft%i s%im2_n s%im1_%i }' % (i,i,vmax,i,left,previous(i),j,i,i,j,vmax,left,i,i,left,i,left,previous(i),i,left))
-                        else:
+                        if left <= vmax:
                             print('    { s%ia2 s%imax%i s%ileft%i s%im2_%i } -> s%ia2rec%imax%ileft%i -> { s%iaP s%imax%i s%ileft%i s%im2_n }' % (i,i,vmax,i,left,previous(i),j,i,j,vmax,left,i,i,vmax,i,left,previous(i)))
+                        else:
+                            print('    { s%ia2 s%imax%i s%ileft%i s%im2_%i s%im1_n } -> s%ia2rec%imax%ileft%i -> { s%ia1 s%imax%i s%ileft%i s%im2_n s%im1_%i }' % (i,i,vmax,i,left,previous(i),j,i,i,j,vmax,left,i,i,left,i,left,previous(i),i,left))
         print()
         for j in range(1,n+1):
             print('    { s%iaP s%im1_%i s%im1_n } -> s%iaPrec1_%i -> { s%iaP s%im1_n s%im1_%i }' % (i,previous(i),j,i,i,j,i,previous(i),i,j))
