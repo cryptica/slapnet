@@ -24,7 +24,7 @@ import Solver.SComponent
 data InputFormat = PNET | LOLA | TPN deriving (Show,Read)
 
 data ImplicitProperty = Termination
-                      | NoDeadlock | NoDeadlockOutOf String
+                      | NoDeadlock | NoDeadlockUnlessFinal
                       | Safe | Bounded Integer
                       deriving (Show,Read)
 
@@ -71,12 +71,11 @@ options =
                }))
         "Prove that there is no deadlock"
 
-        , Option "" ["no-deadlock-out-of"]
-        (ReqArg (\arg opt -> Right opt {
-                           optProperties = NoDeadlockOutOf arg : optProperties opt
-                })
-                "PLACE")
-        "Prove that there is no deadlock unless PLACE is marked"
+        , Option "" ["no-deadlock-unless-final"]
+        (NoArg (\opt -> Right opt {
+                           optProperties = NoDeadlockUnlessFinal : optProperties opt
+               }))
+        "Prove that there is no deadlock unless a final place is marked"
 
         , Option "" ["safe"]
         (NoArg (\opt -> Right opt {
@@ -136,6 +135,7 @@ checkFile parser verbosity refine implicitProperties file = do
                 "Places: " ++ show (length  $ places net) ++ "\n" ++
                 "Transitions: " ++ show (length $ transitions net)
         let addedProperties = map (makeImplicitProperty net) implicitProperties
+        print addedProperties
         rs <- mapM (checkProperty verbosity net refine)
                   (addedProperties ++ properties)
         verbosePut verbosity 0 ""
@@ -151,9 +151,14 @@ makeImplicitProperty net NoDeadlock =
             foldl (:&:) FTrue
                 (map (foldl (:|:) FFalse . map (placeOp Lt) . lpre net)
                      (transitions net))
-makeImplicitProperty net (NoDeadlockOutOf pl) =
-        Property ("no deadlock out of " ++ pl) Safety $
-            placeOp Lt (pl,1) :&: pformula (makeImplicitProperty net NoDeadlock)
+makeImplicitProperty net NoDeadlockUnlessFinal =
+        let finals = [ p | p <- places net, null (lpost net p) ]
+        in  if null finals then error "no final place!"
+            else if length finals > 1 then error ("more than one final place: " ++ show finals)
+            else
+                Property "no deadlock unless final" Safety $
+                    foldl (:&:) FTrue (map (\p -> placeOp Lt (p,1)) finals) :&:
+                    pformula (makeImplicitProperty net NoDeadlock)
 makeImplicitProperty net (Bounded k) =
         Property (show k ++ "-bounded") Safety $
             foldl (:|:) FFalse
@@ -256,9 +261,9 @@ exitSuccessWith msg = do
 exitFailureWith :: String -> IO ()
 exitFailureWith msg = do
         putStrLn msg
-        exitWith $ ExitFailure 1
+        exitWith $ ExitFailure 2
 
 exitErrorWith :: String -> IO ()
 exitErrorWith msg = do
         hPutStrLn stderr msg
-        exitWith $ ExitFailure 2
+        exitWith $ ExitFailure r
