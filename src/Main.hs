@@ -7,7 +7,7 @@ import System.Exit
 import System.IO
 import System.Console.GetOpt
 import Control.Monad
-import Control.Applicative
+import Control.Applicative ((<$>))
 
 import Parser
 import qualified Parser.PNET as PNET
@@ -23,11 +23,16 @@ import Solver.SComponent
 
 data InputFormat = PNET | LOLA | TPN deriving (Show,Read)
 
+data ImplicitProperty = Termination
+                      | NoDeadlock | NoDeadlockOutOf String
+                      | Safe | Bounded Integer
+                      deriving (Show,Read)
+
 data Options = Options { inputFormat :: InputFormat
                        , optVerbosity :: Int
                        , optShowHelp :: Bool
                        , optShowVersion :: Bool
-                       , proveTermination :: Bool
+                       , optProperties :: [ImplicitProperty]
                        , optRefine :: Bool
                        }
 
@@ -36,7 +41,7 @@ startOptions = Options { inputFormat = PNET
                        , optVerbosity = 1
                        , optShowHelp = False
                        , optShowVersion = False
-                       , proveTermination = False
+                       , optProperties = []
                        , optRefine = True
                        }
 
@@ -55,8 +60,38 @@ options =
         "Use the tpn input format"
 
         , Option "" ["termination"]
-        (NoArg (\opt -> Right opt { proveTermination = True }))
+        (NoArg (\opt -> Right opt {
+                           optProperties = Termination : optProperties opt
+               }))
         "Prove termination"
+
+        , Option "" ["no-deadlock"]
+        (NoArg (\opt -> Right opt {
+                           optProperties = NoDeadlock : optProperties opt
+               }))
+        "Prove that there is no deadlock"
+
+        , Option "" ["no-deadlock-out-of"]
+        (ReqArg (\arg opt -> Right opt {
+                           optProperties = NoDeadlockOutOf arg : optProperties opt
+                })
+                "PLACE")
+        "Prove that there is no deadlock unless PLACE is marked"
+
+        , Option "" ["safe"]
+        (NoArg (\opt -> Right opt {
+                           optProperties = Safe : optProperties opt
+               }))
+        "Prove that the net is safe, i.e. 1-bounded"
+
+        , Option "" ["bounded"]
+        (ReqArg (\arg opt -> case reads arg of
+                    [(k, "")] -> Right opt {
+                           optProperties = Bounded k : optProperties opt }
+                    _ -> Left ("invalid argument for k-bounded option: " ++ arg)
+                )
+                "K")
+        "Prove that the net is K-bounded"
 
         , Option "n" ["no-refinement"]
         (NoArg (\opt -> Right opt { optRefine = False }))
@@ -91,19 +126,40 @@ parseArgs = do
                 return $ (,files) <$> foldl (>>=) (return startOptions) actions
             (_, _, errs) -> return $ Left $ concat errs
 
-checkFile :: Parser (PetriNet,[Property]) -> Int -> Bool -> [Property] ->
-            String -> IO Bool
-checkFile parser verbosity refine addedProperties file = do
+checkFile :: Parser (PetriNet,[Property]) -> Int -> Bool ->
+            [ImplicitProperty] -> String -> IO Bool
+checkFile parser verbosity refine implicitProperties file = do
         verbosePut verbosity 0 $ "Reading \"" ++ file ++ "\""
         (net,properties) <- parseFile parser file
         verbosePut verbosity 1 $ "Analyzing " ++ showNetName net
         verbosePut verbosity 2 $
                 "Places: " ++ show (length  $ places net) ++ "\n" ++
                 "Transitions: " ++ show (length $ transitions net)
+        let addedProperties = map (makeImplicitProperty net) implicitProperties
         rs <- mapM (checkProperty verbosity net refine)
                   (addedProperties ++ properties)
         verbosePut verbosity 0 ""
         return $ and rs
+
+placeOp :: Op -> (String, Integer) -> Formula
+placeOp op (p,w) = Atom $ LinIneq (Term [Var 1 p]) op (Term [Const w])
+
+makeImplicitProperty :: PetriNet -> ImplicitProperty -> Property
+makeImplicitProperty _ Termination = Property "termination" Liveness FTrue
+makeImplicitProperty net NoDeadlock =
+        Property "no deadlock" Safety $
+            foldl (:&:) FTrue
+                (map (foldl (:|:) FFalse . map (placeOp Lt) . lpre net)
+                     (transitions net))
+makeImplicitProperty net (NoDeadlockOutOf pl) =
+        Property ("no deadlock out of " ++ pl) Safety $
+            placeOp Lt (pl,1) :&: pformula (makeImplicitProperty net NoDeadlock)
+makeImplicitProperty net (Bounded k) =
+        Property (show k ++ "-bounded") Safety $
+            foldl (:|:) FFalse
+                (map (\p -> placeOp Gt (p,k)) (places net))
+makeImplicitProperty net Safe =
+        Property "safe" Safety $ pformula (makeImplicitProperty net (Bounded 1))
 
 checkProperty :: Int -> PetriNet -> Bool -> Property -> IO Bool
 checkProperty verbosity net refine p = do
@@ -112,7 +168,7 @@ checkProperty verbosity net refine p = do
             Safety -> checkSafetyProperty verbosity net refine (pformula p) []
             Liveness -> checkLivenessProperty verbosity net refine (pformula p) []
         verbosePut verbosity 0 $ showPropertyName p ++
-                                    if r then "is satisfied."
+                                    if r then " is satisfied."
                                     else " may not be satisfied."
         return r
 
@@ -184,8 +240,7 @@ main = do
                                  PNET -> PNET.parseContent
                                  LOLA -> LOLA.parseContent
                                  TPN -> TPN.parseContent
-                let properties = [ Property "termination" Liveness FTrue
-                                 | proveTermination opts ]
+                let properties = optProperties opts
                 rs <- mapM (checkFile parser verbosity refinement properties)
                           files
                 if and rs then
