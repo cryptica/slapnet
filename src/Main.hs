@@ -24,7 +24,7 @@ import Solver.SComponent
 data InputFormat = PNET | LOLA | TPN deriving (Show,Read)
 
 data Options = Options { inputFormat :: InputFormat
-                       , optVerbose :: Bool
+                       , optVerbosity :: Int
                        , optShowHelp :: Bool
                        , optShowVersion :: Bool
                        , proveTermination :: Bool
@@ -33,7 +33,7 @@ data Options = Options { inputFormat :: InputFormat
 
 startOptions :: Options
 startOptions = Options { inputFormat = PNET
-                       , optVerbose = False
+                       , optVerbosity = 1
                        , optShowHelp = False
                        , optShowVersion = False
                        , proveTermination = False
@@ -63,8 +63,12 @@ options =
         "Don't use refinement"
 
         , Option "v" ["verbose"]
-        (NoArg (\opt -> Right opt { optVerbose = True }))
-        "Enable verbose messages"
+        (NoArg (\opt -> Right opt { optVerbosity = optVerbosity opt + 1 }))
+        "Increase verbosity (may be specified more than once)"
+
+        , Option "q" ["quiet"]
+        (NoArg (\opt -> Right opt { optVerbosity = optVerbosity opt - 1 }))
+        "Decrease verbosity (may be specified more than once)"
 
         , Option "V" ["version"]
         (NoArg (\opt -> Right opt { optShowVersion = True }))
@@ -75,6 +79,10 @@ options =
         "Show help"
         ]
 
+verbosePut :: Int -> Int -> String -> IO ()
+verbosePut verbosity level str =
+        when (verbosity >= level) (putStrLn str)
+
 parseArgs :: IO (Either String (Options, [String]))
 parseArgs = do
         args <- getArgs
@@ -83,41 +91,41 @@ parseArgs = do
                 return $ (,files) <$> foldl (>>=) (return startOptions) actions
             (_, _, errs) -> return $ Left $ concat errs
 
-checkFile :: Parser (PetriNet,[Property]) -> Bool -> Bool -> [Property] ->
+checkFile :: Parser (PetriNet,[Property]) -> Int -> Bool -> [Property] ->
             String -> IO Bool
-checkFile parser verbose refine addedProperties file = do
-        putStrLn $ "Reading \"" ++ file ++ "\""
+checkFile parser verbosity refine addedProperties file = do
+        verbosePut verbosity 0 $ "Reading \"" ++ file ++ "\""
         (net,properties) <- parseFile parser file
-        putStrLn $ "Analyzing " ++ showNetName net
-        when verbose (do
-                putStrLn $ "Places: " ++ show (length  $ places net)
-                putStrLn $ "Transitions: " ++ show (length $ transitions net)
-            )
-        rs <- mapM (checkProperty verbose net refine)
+        verbosePut verbosity 1 $ "Analyzing " ++ showNetName net
+        verbosePut verbosity 2 $
+                "Places: " ++ show (length  $ places net) ++ "\n" ++
+                "Transitions: " ++ show (length $ transitions net)
+        rs <- mapM (checkProperty verbosity net refine)
                   (addedProperties ++ properties)
-        putStrLn ""
+        verbosePut verbosity 0 ""
         return $ and rs
 
-checkProperty :: Bool -> PetriNet -> Bool -> Property -> IO Bool
-checkProperty verbose net refine p = do
-        putStrLn $ "\nChecking " ++ showPropertyName p
+checkProperty :: Int -> PetriNet -> Bool -> Property -> IO Bool
+checkProperty verbosity net refine p = do
+        verbosePut verbosity 1 $ "\nChecking " ++ showPropertyName p
         r <- case ptype p of
-            Safety -> checkSafetyProperty verbose net refine (pformula p) []
-            Liveness -> checkLivenessProperty verbose net refine (pformula p) []
-        putStrLn $ if r then "Property is satisfied."
-                        else "Property may not be satisfied."
+            Safety -> checkSafetyProperty verbosity net refine (pformula p) []
+            Liveness -> checkLivenessProperty verbosity net refine (pformula p) []
+        verbosePut verbosity 0 $ showPropertyName p ++
+                                    if r then "is satisfied."
+                                    else " may not be satisfied."
         return r
 
-checkSafetyProperty :: Bool -> PetriNet -> Bool ->
+checkSafetyProperty :: Int -> PetriNet -> Bool ->
         Formula -> [[String]] -> IO Bool
-checkSafetyProperty verbose net refine f traps = do
+checkSafetyProperty verbosity net refine f traps = do
         r <- checkSat $ checkStateEquationSat net f traps
         case r of
             Nothing -> return True
             Just a -> do
                 let assigned = markedPlacesFromAssignment net a
-                putStrLn "Assignment found"
-                when verbose (putStrLn $ "Places marked: " ++ show assigned)
+                verbosePut verbosity 1 "Assignment found"
+                verbosePut verbosity 2 $ "Places marked: " ++ show assigned
                 if refine then do
                     rt <- checkSat $ checkTrapSat net assigned
                     case rt of
@@ -126,35 +134,35 @@ checkSafetyProperty verbose net refine f traps = do
                             return False
                         Just at -> do
                             let trap = trapFromAssignment at
-                            putStrLn "Trap found"
-                            when verbose (putStrLn $ "Places in trap: " ++
-                                                     show trap)
-                            checkSafetyProperty verbose net refine f
+                            verbosePut verbosity 1 "Trap found"
+                            verbosePut verbosity 2 $ "Places in trap: " ++
+                                                      show trap
+                            checkSafetyProperty verbosity net refine f
                                                 (trap:traps)
                 else
                     return False
 
-checkLivenessProperty :: Bool -> PetriNet -> Bool ->
+checkLivenessProperty :: Int -> PetriNet -> Bool ->
         Formula -> [([String],[String])] -> IO Bool
-checkLivenessProperty verbose net refine f strans = do
+checkLivenessProperty verbosity net refine f strans = do
         r <- checkSat $ checkTransitionInvariantSat net f strans
         case r of
             Nothing -> return True
             Just ax -> do
                 let fired = firedTransitionsFromAssignment ax
-                putStrLn "Assignment found"
-                when verbose (putStrLn $ "Transitions fired: " ++ show fired)
+                verbosePut verbosity 1 "Assignment found"
+                verbosePut verbosity 2 $ "Transitions fired: " ++ show fired
                 if refine then do
                     rt <- checkSat $ checkSComponentSat net fired ax
                     case rt of
                         Nothing -> do
-                            putStrLn "No S-component found"
+                            verbosePut verbosity 1 "No S-component found"
                             return False
                         Just as -> do
                             let sOutIn = getSComponentOutIn net ax as
-                            putStrLn "S-component found"
-                            when verbose (putStrLn $ "Out/In: " ++ show sOutIn)
-                            checkLivenessProperty verbose net refine f
+                            verbosePut verbosity 1 "S-component found"
+                            verbosePut verbosity 2 $ "Out/In: " ++ show sOutIn
+                            checkLivenessProperty verbosity net refine f
                                                   (sOutIn:strans)
                 else
                     return False
@@ -166,19 +174,20 @@ main = do
         case args of
             Left err -> exitErrorWith err
             Right (opts, files) -> do
-
                 when (optShowVersion opts) (exitSuccessWith "Version 0.01")
                 when (optShowHelp opts) (exitSuccessWith
                      (usageInfo "SLAPnet" options))
                 when (null files) (exitErrorWith "No input file given")
+                let verbosity = optVerbosity opts
+                    refinement = optRefine opts
                 let parser = case inputFormat opts of
                                  PNET -> PNET.parseContent
                                  LOLA -> LOLA.parseContent
                                  TPN -> TPN.parseContent
                 let properties = [ Property "termination" Liveness FTrue
                                  | proveTermination opts ]
-                rs <- mapM (checkFile parser (optVerbose opts) (optRefine opts)
-                                     properties) files
+                rs <- mapM (checkFile parser verbosity refinement properties)
+                          files
                 if and rs then
                     exitSuccessWith "All properties satisfied."
                 else
