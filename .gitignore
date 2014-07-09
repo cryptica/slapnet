@@ -17,6 +17,7 @@ cabal.config
 # Benchmark directory
 benchmarks/**/*.pnet
 benchmarks/**/*.out
+benchmarks/**/*.log
 benchmarks/**/*.list
 benchmarks/**/*.list.sorted
 benchmarks/**/*.pdf
