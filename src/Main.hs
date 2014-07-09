@@ -137,7 +137,6 @@ checkFile parser verbosity refine implicitProperties file = do
                 "Places: " ++ show (length  $ places net) ++ "\n" ++
                 "Transitions: " ++ show (length $ transitions net)
         addedProperties <- mapM (makeImplicitProperty net) implicitProperties
-        print properties
         rs <- mapM (checkProperty verbosity net refine)
                   (addedProperties ++ properties)
         verbosePut verbosity 0 ""
