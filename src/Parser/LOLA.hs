@@ -1,5 +1,6 @@
 module Parser.LOLA
-    (parseContent)
+    (module Parser.LOLAFormula,
+     parseContent)
 where
 
 import Control.Applicative ((*>),(<*))
@@ -8,6 +9,7 @@ import Text.Parsec.Language (LanguageDef, emptyDef)
 import qualified Text.Parsec.Token as Token
 
 import Parser
+import Parser.LOLAFormula
 import PetriNet (PetriNet,makePetriNetWithTrans)
 import Property
 

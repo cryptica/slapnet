@@ -23,9 +23,8 @@ import Solver.SComponent
 
 data InputFormat = PNET | LOLA | TPN deriving (Show,Read)
 
--- TODO: Change NoDeadlockOutOf to NoDeadlockUnless=FILE
 data ImplicitProperty = Termination
-                      | NoDeadlock | NoDeadlockOutOf String
+                      | NoDeadlock | NoDeadlockUnless String
                       | Safe | Bounded Integer
                       deriving (Show,Read)
 
@@ -72,12 +71,13 @@ options =
                }))
         "Prove that there is no deadlock"
 
-        , Option "" ["no-deadlock-out-of"]
+        , Option "" ["no-deadlock-unless"]
         (ReqArg (\arg opt -> Right opt {
-                           optProperties = NoDeadlockOutOf arg : optProperties opt
+                           optProperties = NoDeadlockUnless arg : optProperties opt
                 })
-                "PLACE")
-        "Prove that there is no deadlock unless PLACE is marked"
+                "FILE")
+        ("Prove that there is no deadlock unless the\n" ++
+         "formula given in FILE is satisfied")
 
         , Option "" ["safe"]
         (NoArg (\opt -> Right opt {
@@ -136,7 +136,7 @@ checkFile parser verbosity refine implicitProperties file = do
         verbosePut verbosity 2 $
                 "Places: " ++ show (length  $ places net) ++ "\n" ++
                 "Transitions: " ++ show (length $ transitions net)
-        let addedProperties = map (makeImplicitProperty net) implicitProperties
+        addedProperties <- mapM (makeImplicitProperty net) implicitProperties
         print properties
         rs <- mapM (checkProperty verbosity net refine)
                   (addedProperties ++ properties)
@@ -146,22 +146,26 @@ checkFile parser verbosity refine implicitProperties file = do
 placeOp :: Op -> (String, Integer) -> Formula
 placeOp op (p,w) = Atom $ LinIneq (Var p) op (Const w)
 
-makeImplicitProperty :: PetriNet -> ImplicitProperty -> Property
-makeImplicitProperty _ Termination = Property "termination" Liveness FTrue
+makeImplicitProperty :: PetriNet -> ImplicitProperty -> IO Property
+makeImplicitProperty _ Termination =
+        return $ Property "termination" Liveness FTrue
 makeImplicitProperty net NoDeadlock =
-        Property "no deadlock" Safety $
+        return $ Property "no deadlock" Safety $
             foldl (:&:) FTrue
                 (map (foldl (:|:) FFalse . map (placeOp Lt) . lpre net)
                      (transitions net))
-makeImplicitProperty net (NoDeadlockOutOf pl) =
-        Property ("no deadlock out of " ++ pl) Safety $
-            placeOp Lt (pl,1) :&: pformula (makeImplicitProperty net NoDeadlock)
+makeImplicitProperty net (NoDeadlockUnless file) = do
+        nodeadlock <- makeImplicitProperty net NoDeadlock
+        property <- parseFile LOLA.parseFormula file
+        return $ Property "no deadlock unless" Safety $
+            Neg property :&: pformula nodeadlock
 makeImplicitProperty net (Bounded k) =
-        Property (show k ++ "-bounded") Safety $
+        return $ Property (show k ++ "-bounded") Safety $
             foldl (:|:) FFalse
                 (map (\p -> placeOp Gt (p,k)) (places net))
-makeImplicitProperty net Safe =
-        Property "safe" Safety $ pformula (makeImplicitProperty net (Bounded 1))
+makeImplicitProperty net Safe = do
+        bounded <- makeImplicitProperty net (Bounded 1)
+        return $ Property "safe" Safety $ pformula bounded
 
 checkProperty :: Int -> PetriNet -> Bool -> Property -> IO Bool
 checkProperty verbosity net refine p = do
