@@ -20,10 +20,10 @@ data Term = Var String
 instance Show Term where
         show (Var x) = x
         show (Const c) = show c
-        show (Minus t) = "-(" ++ show t ++ ")"
-        show (t :+: u) = show t ++ " + " ++ show u
-        show (t :-: u) = show t ++ " - " ++ show u
-        show (t :*: u) = "(" ++ show t ++ ") * (" ++ show u ++ ")"
+        show (Minus t) = "-" ++ show t
+        show (t :+: u) = "(" ++ show t ++ " + " ++ show u ++ ")"
+        show (t :-: u) = "(" ++ show t ++ " - " ++ show u ++ ")"
+        show (t :*: u) = show t ++ " * " ++ show u
 
 data Op = Gt | Ge | Eq | Ne | Le | Lt
 

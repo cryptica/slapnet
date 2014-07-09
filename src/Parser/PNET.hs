@@ -137,9 +137,10 @@ termOperatorTable =
         ]
 
 termAtom :: Parser Term
-termAtom =  parens term
+termAtom =  (Var <$> ident)
         <|> (Const <$> integer)
-        <|> (Var <$> ident)
+        <|> parens term
+        <?> "basic term"
 
 term :: Parser Term
 term = buildExpressionParser termOperatorTable termAtom <?> "term"
@@ -167,10 +168,11 @@ formOperatorTable =
         ]
 
 formAtom :: Parser Formula
-formAtom =  parens formula
+formAtom =  try linIneq
         <|> (reserved "true" *> return FTrue)
         <|> (reserved "false" *> return FFalse)
-        <|> linIneq
+        <|> parens formula
+        <?> "basic formula"
 
 formula :: Parser Formula
 formula = buildExpressionParser formOperatorTable formAtom <?> "formula"
