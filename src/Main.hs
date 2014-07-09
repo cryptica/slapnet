@@ -137,13 +137,14 @@ checkFile parser verbosity refine implicitProperties file = do
                 "Places: " ++ show (length  $ places net) ++ "\n" ++
                 "Transitions: " ++ show (length $ transitions net)
         let addedProperties = map (makeImplicitProperty net) implicitProperties
+        print properties
         rs <- mapM (checkProperty verbosity net refine)
                   (addedProperties ++ properties)
         verbosePut verbosity 0 ""
         return $ and rs
 
 placeOp :: Op -> (String, Integer) -> Formula
-placeOp op (p,w) = Atom $ LinIneq (Term [Var 1 p]) op (Term [Const w])
+placeOp op (p,w) = Atom $ LinIneq (Var p) op (Const w)
 
 makeImplicitProperty :: PetriNet -> ImplicitProperty -> Property
 makeImplicitProperty _ Termination = Property "termination" Liveness FTrue

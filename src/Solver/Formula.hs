@@ -8,14 +8,18 @@ import Property
 import Solver
 
 evaluateTerm :: Term -> ModelSI -> SInteger
-evaluateTerm (Term xs) m = sum $ map evaluateLinAtom xs
-        where evaluateLinAtom (Var c x) = literal c * mVal m x
-              evaluateLinAtom (Const c) = literal c
+evaluateTerm (Var x) m = mVal m x
+evaluateTerm (Const c) _ = literal c
+evaluateTerm (Minus t) m = - evaluateTerm t m
+evaluateTerm (t :+: u) m = evaluateTerm t m + evaluateTerm u m
+evaluateTerm (t :-: u) m = evaluateTerm t m - evaluateTerm u m
+evaluateTerm (t :*: u) m = evaluateTerm t m * evaluateTerm u m
 
 opToFunction :: Op -> SInteger -> SInteger -> SBool
 opToFunction Gt = (.>)
 opToFunction Ge = (.>=)
 opToFunction Eq = (.==)
+opToFunction Ne = (./=)
 opToFunction Le = (.<=)
 opToFunction Lt = (.<)
 

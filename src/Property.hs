@@ -7,31 +7,31 @@ module Property
      Formula(..),
      LinearInequation(..),
      Op(..),
-     Term(..),
-     LinAtom(..))
+     Term(..))
 where
 
-import Data.List (intercalate)
-
-data LinAtom = Var Integer String | Const Integer
-
-instance Show LinAtom where
-        show (Var c x) | c == 1 = x
-        show (Var c x) | c == -1 = "-" ++ x
-        show (Var c x) = show c ++ "*" ++ x
-        show (Const c) = show c
-
-data Term = Term [LinAtom]
+data Term = Var String
+          | Const Integer
+          | Minus Term
+          | Term :+: Term
+          | Term :-: Term
+          | Term :*: Term
 
 instance Show Term where
-        show (Term xs) = intercalate " + " (map show xs)
+        show (Var x) = x
+        show (Const c) = show c
+        show (Minus t) = "-(" ++ show t ++ ")"
+        show (t :+: u) = show t ++ " + " ++ show u
+        show (t :-: u) = show t ++ " - " ++ show u
+        show (t :*: u) = "(" ++ show t ++ ") * (" ++ show u ++ ")"
 
-data Op = Gt | Ge | Eq | Le | Lt
+data Op = Gt | Ge | Eq | Ne | Le | Lt
 
 instance Show Op where
         show Gt = ">"
         show Ge = "≥"
         show Eq = "="
+        show Ne = "≠"
         show Le = "≤"
         show Lt = "<"
 

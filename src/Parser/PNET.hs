@@ -2,8 +2,10 @@ module Parser.PNET
     (parseContent)
 where
 
-import Control.Applicative ((<*),(*>),(<*>),(<$>))
+import Control.Applicative ((<*),(*>),(<$>))
+import Data.Functor.Identity
 import Text.Parsec
+import Text.Parsec.Expr
 import Text.Parsec.Language (LanguageDef, emptyDef)
 import qualified Text.Parsec.Token as Token
 
@@ -20,7 +22,7 @@ languageDef =
                  Token.identStart      = letter <|> char '_',
                  Token.identLetter     = alphaNum <|> char '_',
                  Token.reservedNames   = ["true", "false"],
-                 Token.reservedOpNames = ["->", "<", "<=", "=", ">=", ">",
+                 Token.reservedOpNames = ["->", "<", "<=", "=", "!=", ">=", ">",
                                           "+", "-", "*", "&&", "||", "!"]
                  }
 
@@ -122,23 +124,31 @@ petriNet = do
                   Arcs a -> (ps,ts,a ++ as,is)
                   Initial i -> (ps,ts,as,i ++ is)
 
-preFactor :: Parser Integer
-preFactor = (reservedOp "-" *> return (-1)) <|>
-            (reservedOp "+" *> return 1)
+binary :: String -> (a -> a -> a) -> Assoc -> Operator String () Identity a
+binary name fun = Infix  ( reservedOp name *> return fun )
+prefix :: String -> (a -> a) -> Operator String () Identity a
+prefix name fun = Prefix ( reservedOp name *> return fun )
 
-linAtom :: Integer -> Parser LinAtom
-linAtom fac = ( integer >>= \lhs ->
-                option (Const (fac*lhs)) $ Var (fac*lhs) <$> (reservedOp "*" *> ident)
-              ) <|> Var fac <$> ident
+termOperatorTable :: [[Operator String () Identity Term]]
+termOperatorTable =
+        [ [ prefix "-" Minus ]
+        , [ binary "*" (:*:) AssocLeft ]
+        , [ binary "+" (:+:) AssocLeft, binary "-" (:-:) AssocLeft ]
+        ]
+
+termAtom :: Parser Term
+termAtom =  parens term
+        <|> (Const <$> integer)
+        <|> (Var <$> ident)
 
 term :: Parser Term
-term = Term <$> ((:) <$> (option 1 preFactor >>= linAtom) <*>
-                         many (preFactor >>= linAtom))
+term = buildExpressionParser termOperatorTable termAtom <?> "term"
 
 parseOp :: Parser Op
 parseOp = (reservedOp "<" *> return Lt) <|>
           (reservedOp "<=" *> return Le) <|>
           (reservedOp "=" *> return Eq) <|>
+          (reservedOp "!=" *> return Ne) <|>
           (reservedOp ">" *> return Gt) <|>
           (reservedOp ">=" *> return Ge)
 
@@ -149,29 +159,21 @@ linIneq = do
         rhs <- term
         return (Atom (LinIneq lhs op rhs))
 
-atom :: Parser Formula
-atom = (reserved "true" *> return FTrue) <|>
-       (reserved "false" *> return FFalse) <|>
-       linIneq
+formOperatorTable :: [[Operator String () Identity Formula]]
+formOperatorTable =
+        [ [ prefix "!" Neg ]
+        , [ binary "&&" (:&:) AssocRight ]
+        , [ binary "||" (:|:) AssocRight ]
+        ]
 
-parensForm :: Parser Formula
-parensForm = atom <|> parens formula
-
-negation :: Parser Formula
-negation = (Neg <$> (reservedOp "!" *> negation)) <|> parensForm
-
-conjunction :: Parser Formula
-conjunction = do
-        lhs <- negation
-        option lhs ((lhs :&:) <$> (reservedOp "&&" *> conjunction))
-
-disjunction :: Parser Formula
-disjunction = do
-        lhs <- conjunction
-        option lhs ((lhs :|:) <$> (reservedOp "||" *> disjunction))
+formAtom :: Parser Formula
+formAtom =  parens formula
+        <|> (reserved "true" *> return FTrue)
+        <|> (reserved "false" *> return FFalse)
+        <|> linIneq
 
 formula :: Parser Formula
-formula = disjunction
+formula = buildExpressionParser formOperatorTable formAtom <?> "formula"
 
 propertyType :: Parser PropertyType
 propertyType =
