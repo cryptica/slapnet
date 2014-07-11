@@ -9,7 +9,6 @@ for benchmark in ${benchmarks[@]}; do
   >$benchmark_dir/dontknow-slapnet.list
   >$benchmark_dir/timeout-slapnet.list
   >$benchmark_dir/error-slapnet.list
-  >$benchmark_dir/timing-slapnet.log
   for pnet_file in `find $benchmark_dir -name "*.pnet"`; do
     T="$(date +%s%N)"
     (
