@@ -8,6 +8,7 @@ import System.IO
 import System.Console.GetOpt
 import Control.Monad
 import Control.Applicative ((<$>))
+import Data.List (partition)
 
 import Parser
 import qualified Parser.PNET as PNET
@@ -25,6 +26,9 @@ data InputFormat = PNET | LOLA | TPN deriving (Show,Read)
 
 data ImplicitProperty = Termination
                       | NoDeadlock | NoDeadlockUnless String
+                      | NoDeadlockUnlessFinal
+                      | ProperTermination
+                      | Workflow
                       | Safe | Bounded Integer
                       deriving (Show,Read)
 
@@ -59,29 +63,48 @@ options =
         (NoArg (\opt -> Right opt { inputFormat = TPN }))
         "Use the tpn input format"
 
+        , Option "" ["workflow"]
+        (NoArg (\opt -> Right opt {
+                   optProperties = Workflow : optProperties opt
+               }))
+        "Check that the net is a workflow net"
+
         , Option "" ["termination"]
         (NoArg (\opt -> Right opt {
-                           optProperties = Termination : optProperties opt
+                   optProperties = Termination : optProperties opt
                }))
         "Prove termination"
 
+        , Option "" ["proper-termination"]
+        (NoArg (\opt -> Right opt {
+                   optProperties = ProperTermination : optProperties opt
+               }))
+        "Prove termination in the final marking"
+
         , Option "" ["no-deadlock"]
         (NoArg (\opt -> Right opt {
-                           optProperties = NoDeadlock : optProperties opt
+                   optProperties = NoDeadlock : optProperties opt
                }))
         "Prove that there is no deadlock"
 
+        , Option "" ["no-deadlock-unless-final"]
+        (NoArg (\opt -> Right opt {
+                   optProperties = NoDeadlockUnlessFinal : optProperties opt
+               }))
+        ("Prove that there is no deadlock unless\n" ++
+         "only final places are marked")
+
         , Option "" ["no-deadlock-unless"]
         (ReqArg (\arg opt -> Right opt {
-                           optProperties = NoDeadlockUnless arg : optProperties opt
+                   optProperties = NoDeadlockUnless arg : optProperties opt
                 })
                 "FILE")
-        ("Prove that there is no deadlock unless the\n" ++
-         "formula given in FILE is satisfied")
+        ("Prove that there is no deadlock unless\n" ++
+         "the formula given in FILE is satisfied")
 
         , Option "" ["safe"]
         (NoArg (\opt -> Right opt {
-                           optProperties = Safe : optProperties opt
+                   optProperties = Safe : optProperties opt
                }))
         "Prove that the net is safe, i.e. 1-bounded"
 
@@ -146,13 +169,34 @@ placeOp :: Op -> (String, Integer) -> Formula
 placeOp op (p,w) = Atom $ LinIneq (Var p) op (Const w)
 
 makeImplicitProperty :: PetriNet -> ImplicitProperty -> IO Property
+makeImplicitProperty net Workflow = do
+        let sources = filter (null . lpre net) (places net)
+        let sinks = filter (null . lpost net) (places net)
+        putStrLn "Sources:"
+        print sources
+        putStrLn "Sinks:"
+        print sinks
+        return $ Property "workflow" Safety $
+            if length sources == 1 && length sinks == 1 then FFalse else FTrue
 makeImplicitProperty _ Termination =
         return $ Property "termination" Liveness FTrue
+makeImplicitProperty net ProperTermination = do
+        let (finals, nonfinals) = partition (null . lpost net) (places net)
+        return $ Property "proper termination" Safety
+            (foldl (:|:) FFalse (map (\p -> placeOp Gt (p,0)) finals) :&:
+             foldl (:|:) FFalse (map (\p -> placeOp Gt (p,0)) nonfinals))
 makeImplicitProperty net NoDeadlock =
         return $ Property "no deadlock" Safety $
             foldl (:&:) FTrue
                 (map (foldl (:|:) FFalse . map (placeOp Lt) . lpre net)
                      (transitions net))
+makeImplicitProperty net NoDeadlockUnlessFinal = do
+        nodeadlock <- makeImplicitProperty net NoDeadlock
+        let (finals, nonfinals) = partition (null . lpost net) (places net)
+        return $ Property "no deadlock unless final" Safety $
+            (foldl (:&:) FTrue  (map (\p -> placeOp Eq (p,0)) finals) :|:
+             foldl (:|:) FFalse (map (\p -> placeOp Gt (p,0)) nonfinals)) :&:
+            pformula nodeadlock
 makeImplicitProperty net (NoDeadlockUnless file) = do
         nodeadlock <- makeImplicitProperty net NoDeadlock
         property <- parseFile LOLA.parseFormula file
