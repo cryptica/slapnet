@@ -61,11 +61,11 @@ options =
         (NoArg (\opt -> Right opt { inputFormat = TPN }))
         "Use the tpn input format"
 
-        , Option "" ["termination"]
+        , Option "" ["terminating"]
         (NoArg (\opt -> Right opt {
                    optProperties = Termination : optProperties opt
                }))
-        "Prove termination"
+        "Prove that the net is terminating"
 
         , Option "" ["proper-termination"]
         (NoArg (\opt -> Right opt {
@@ -73,18 +73,18 @@ options =
                }))
         "Prove termination in the final marking"
 
-        , Option "" ["no-deadlock"]
+        , Option "" ["deadlock-free"]
         (NoArg (\opt -> Right opt {
                    optProperties = NoDeadlock : optProperties opt
                }))
-        "Prove that there is no deadlock"
+        "Prove that the net is deadlock-free"
 
-        , Option "" ["no-deadlock-unless-final"]
+        , Option "" ["deadlock-free-unless-final"]
         (NoArg (\opt -> Right opt {
                    optProperties = NoDeadlockUnlessFinal : optProperties opt
                }))
-        ("Prove that there is no deadlock unless\n" ++
-         "only final places are marked")
+        ("Prove that the net is deadlock-free\n" ++
+         "unless it is in the final marking")
 
         , Option "" ["safe"]
         (NoArg (\opt -> Right opt {
