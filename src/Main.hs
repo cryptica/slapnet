@@ -24,6 +24,8 @@ import Solver.SComponent
 
 data InputFormat = PNET | LOLA | TPN deriving (Show,Read)
 
+data NetTransformation = TerminationToReachability
+
 data ImplicitProperty = Termination
                       | NoDeadlock | NoDeadlockUnlessFinal
                       | ProperTermination
@@ -35,6 +37,7 @@ data Options = Options { inputFormat :: InputFormat
                        , optShowHelp :: Bool
                        , optShowVersion :: Bool
                        , optProperties :: [ImplicitProperty]
+                       , optTransformations :: [NetTransformation]
                        , optRefine :: Bool
                        }
 
@@ -44,6 +47,7 @@ startOptions = Options { inputFormat = PNET
                        , optShowHelp = False
                        , optShowVersion = False
                        , optProperties = []
+                       , optTransformations = []
                        , optRefine = True
                        }
 
@@ -60,6 +64,12 @@ options =
         , Option "" ["tpn"]
         (NoArg (\opt -> Right opt { inputFormat = TPN }))
         "Use the tpn input format"
+
+        , Option "" ["termination-to-reachability"]
+        (NoArg (\opt -> Right opt {
+            optTransformations = TerminationToReachability : optTransformations opt
+          }))
+        "Reduce termination to reachability"
 
         , Option "" ["terminating"]
         (NoArg (\opt -> Right opt {
@@ -135,22 +145,26 @@ parseArgs = do
             (_, _, errs) -> return $ Left $ concat errs
 
 checkFile :: Parser (PetriNet,[Property]) -> Int -> Bool ->
-            [ImplicitProperty] -> String -> IO Bool
-checkFile parser verbosity refine implicitProperties file = do
+            [ImplicitProperty] -> [NetTransformation] -> String -> IO Bool
+checkFile parser verbosity refine implicitProperties transformations file = do
         verbosePut verbosity 0 $ "Reading \"" ++ file ++ "\""
-        (net,properties) <- parseFile parser file
+        (net,props) <- parseFile parser file
         verbosePut verbosity 1 $ "Analyzing " ++ showNetName net
         verbosePut verbosity 2 $
                 "Places: " ++ show (length  $ places net) ++ "\n" ++
                 "Transitions: " ++ show (length $ transitions net)
-        let addedProperties = map (makeImplicitProperty net) implicitProperties
-        rs <- mapM (checkProperty verbosity net refine)
-                  (addedProperties ++ properties)
+        let props' = props ++ map (makeImplicitProperty net) implicitProperties
+        let (net',props'') = foldl transformNet (net,props') transformations
+        rs <- mapM (checkProperty verbosity net' refine) props''
         verbosePut verbosity 0 ""
         return $ and rs
 
 placeOp :: Op -> (String, Integer) -> Formula
 placeOp op (p,w) = Atom $ LinIneq (Var p) op (Const w)
+
+transformNet :: (PetriNet, [Property]) -> NetTransformation ->
+               (PetriNet, [Property])
+transformNet (net, props) TerminationToReachability = (net, props)
 
 makeImplicitProperty :: PetriNet -> ImplicitProperty -> Property
 makeImplicitProperty _ Termination =
@@ -259,9 +273,10 @@ main = do
                                  PNET -> PNET.parseContent
                                  LOLA -> LOLA.parseContent
                                  TPN -> TPN.parseContent
-                let properties = optProperties opts
-                rs <- mapM (checkFile parser verbosity refinement properties)
-                          files
+                let properties = reverse $ optProperties opts
+                let transformations = reverse $ optTransformations opts
+                rs <- mapM (checkFile parser verbosity refinement properties
+                                transformations) files
                 if and rs then
                     exitSuccessWith "All properties satisfied."
                 else
