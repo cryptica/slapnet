@@ -65,11 +65,11 @@ options =
         (NoArg (\opt -> Right opt { inputFormat = TPN }))
         "Use the tpn input format"
 
-        , Option "" ["termination-to-reachability"]
+        , Option "" ["termination-by-reachability"]
         (NoArg (\opt -> Right opt {
             optTransformations = TerminationToReachability : optTransformations opt
           }))
-        "Reduce termination to reachability"
+        "Prove termination by reducing it to reachability"
 
         , Option "" ["terminating"]
         (NoArg (\opt -> Right opt {
@@ -149,12 +149,13 @@ checkFile :: Parser (PetriNet,[Property]) -> Int -> Bool ->
 checkFile parser verbosity refine implicitProperties transformations file = do
         verbosePut verbosity 0 $ "Reading \"" ++ file ++ "\""
         (net,props) <- parseFile parser file
-        verbosePut verbosity 1 $ "Analyzing " ++ showNetName net
-        verbosePut verbosity 2 $
-                "Places: " ++ show (length  $ places net) ++ "\n" ++
-                "Transitions: " ++ show (length $ transitions net)
         let props' = props ++ map (makeImplicitProperty net) implicitProperties
         let (net',props'') = foldl transformNet (net,props') transformations
+        verbosePut verbosity 1 $ "Analyzing " ++ showNetName net
+        verbosePut verbosity 2 $
+                "Places: " ++ show (length  $ places net') ++ "; " ++
+                "Transitions: " ++ show (length $ transitions net')
+        verbosePut verbosity 3 $ show net'
         rs <- mapM (checkProperty verbosity net' refine) props''
         verbosePut verbosity 0 ""
         return $ and rs
@@ -164,7 +165,28 @@ placeOp op (p,w) = Atom $ LinIneq (Var p) op (Const w)
 
 transformNet :: (PetriNet, [Property]) -> NetTransformation ->
                (PetriNet, [Property])
-transformNet (net, props) TerminationToReachability = (net, props)
+transformNet (net, props) TerminationToReachability =
+        let prime = ('\'':)
+            primeFst (p,x) = (prime p, x)
+            ps = ["'sigma", "'m1", "'m2"] ++
+                 places net ++ map prime (places net)
+            is = [("'m1", 1)] ++
+                 initials net ++ map primeFst (initials net)
+            ts = ("'switch", [("'m1",1)], [("'m2",1)]) :
+                 concatMap (\t ->
+                    let (preT, postT) = context net t
+                        pre'  = [("'m1",1)] ++ preT  ++ map primeFst preT
+                        post' = [("'m1",1)] ++ postT ++ map primeFst postT
+                        pre''  = ("'m2",1) : map primeFst preT
+                        post'' = [("'m2",1), ("'sigma",1)] ++ map primeFst postT
+                    in  [(t, pre', post'), (prime t, pre'', post'')]
+                 )
+                 (transitions net)
+            prop = Property "termination by reachability" Safety $
+                    foldl (:&:) (Atom (LinIneq (Var "'sigma") Ge (Const 1)))
+                      (map (\p -> Atom (LinIneq (Var (prime p)) Ge (Var p)))
+                        (places net))
+        in  (makePetriNetWithTrans (name net) ps ts is, prop : props)
 
 makeImplicitProperty :: PetriNet -> ImplicitProperty -> Property
 makeImplicitProperty _ Termination =
@@ -197,6 +219,7 @@ makeImplicitProperty net Safe =
 checkProperty :: Int -> PetriNet -> Bool -> Property -> IO Bool
 checkProperty verbosity net refine p = do
         verbosePut verbosity 1 $ "\nChecking " ++ showPropertyName p
+        verbosePut verbosity 3 $ show p
         r <- case ptype p of
             Safety -> checkSafetyProperty verbosity net refine (pformula p) []
             Liveness -> checkLivenessProperty verbosity net refine (pformula p) []
@@ -215,6 +238,7 @@ checkSafetyProperty verbosity net refine f traps = do
                 let assigned = markedPlacesFromAssignment net a
                 verbosePut verbosity 1 "Assignment found"
                 verbosePut verbosity 2 $ "Places marked: " ++ show assigned
+                verbosePut verbosity 3 $ "Assignment: " ++ show a
                 if refine then do
                     rt <- checkSat $ checkTrapSat net assigned
                     case rt of
@@ -226,6 +250,8 @@ checkSafetyProperty verbosity net refine f traps = do
                             verbosePut verbosity 1 "Trap found"
                             verbosePut verbosity 2 $ "Places in trap: " ++
                                                       show trap
+                            verbosePut verbosity 3 $ "Trap assignment: " ++
+                                                      show at
                             checkSafetyProperty verbosity net refine f
                                                 (trap:traps)
                 else
@@ -241,6 +267,7 @@ checkLivenessProperty verbosity net refine f strans = do
                 let fired = firedTransitionsFromAssignment ax
                 verbosePut verbosity 1 "Assignment found"
                 verbosePut verbosity 2 $ "Transitions fired: " ++ show fired
+                verbosePut verbosity 3 $ "Assignment: " ++ show ax
                 if refine then do
                     rt <- checkSat $ checkSComponentSat net fired ax
                     case rt of
@@ -251,6 +278,8 @@ checkLivenessProperty verbosity net refine f strans = do
                             let sOutIn = getSComponentOutIn net ax as
                             verbosePut verbosity 1 "S-component found"
                             verbosePut verbosity 2 $ "Out/In: " ++ show sOutIn
+                            verbosePut verbosity 3 $ "S-Component assignment: " ++
+                                                      show as
                             checkLivenessProperty verbosity net refine f
                                                   (sOutIn:strans)
                 else

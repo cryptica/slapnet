@@ -22,7 +22,7 @@ for benchmark in ${benchmarks[@]}; do
       fi
       (
         set -o pipefail;
-        timeout 60 $executable --$ext --safe $file | tee $file.out
+        timeout 60 $executable --$ext --termination-by-reachability $file | tee $file.out
       )
       result=$?
       T=$(($(date +%s%N)-T))

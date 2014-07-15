@@ -35,6 +35,7 @@ instance Show Op where
         show Le = "≤"
         show Lt = "<"
 
+-- TODO: merge LinIneq constructor into Formula
 data LinearInequation = LinIneq Term Op Term
 
 instance Show LinearInequation where

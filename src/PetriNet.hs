@@ -1,8 +1,8 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 module PetriNet
-    (PetriNet,showNetName,places,transitions,initial,
-     pre,lpre,post,lpost,initials,
+    (PetriNet,name,showNetName,places,transitions,initial,
+     pre,lpre,post,lpost,initials,context,
      makePetriNet,makePetriNetWithTrans)
 where
 

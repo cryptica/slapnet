@@ -8,7 +8,10 @@ where
 import Data.SBV
 import qualified Data.Map as M
 
-newtype Model a = Model { getMap :: M.Map String a } deriving Show
+newtype Model a = Model { getMap :: M.Map String a }
+
+instance Show a => Show (Model a) where
+        show = show . M.toList . getMap
 
 type ModelSI = Model SInteger
 type ModelSB = Model SBool
