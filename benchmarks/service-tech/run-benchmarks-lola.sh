@@ -22,7 +22,7 @@ for benchmark in ${benchmarks[@]}; do
       fi
       (
         set -o pipefail;
-        $executable -f $final $file --markinglimit=1000000 --stubborn=deletion 2>&1 | tee $file.out
+        $executable -f $file.terminating.task1 $file.terminating --markinglimit=1000000 2>&1 | tee $file.out
       )
       result=$?
       ryes=$(grep "result: yes" $file.out)

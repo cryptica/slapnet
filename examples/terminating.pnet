@@ -1,0 +1,9 @@
+petri net "terminating" {
+    places { p1 p2 }
+    transitions { t1 t2 }
+    arcs {
+        p1 -> t1 -> p2
+        p2 -> t2 -> p1
+    }
+    initial { p1 }
+}
