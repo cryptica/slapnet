@@ -15,6 +15,7 @@ import qualified Parser.PNET as PNET
 import qualified Parser.LOLA as LOLA
 import qualified Parser.TPN as TPN
 import PetriNet
+import Printer
 import Property
 import Solver
 import Solver.StateEquation
@@ -39,6 +40,7 @@ data Options = Options { inputFormat :: InputFormat
                        , optProperties :: [ImplicitProperty]
                        , optTransformations :: [NetTransformation]
                        , optRefine :: Bool
+                       , optOutput :: Maybe String
                        }
 
 startOptions :: Options
@@ -49,6 +51,7 @@ startOptions = Options { inputFormat = PNET
                        , optProperties = []
                        , optTransformations = []
                        , optRefine = True
+                       , optOutput = Nothing
                        }
 
 options :: [ OptDescr (Options -> Either String Options) ]
@@ -115,6 +118,13 @@ options =
         (NoArg (\opt -> Right opt { optRefine = False }))
         "Don't use refinement"
 
+        , Option "o" ["output"]
+        (ReqArg (\arg opt -> Right opt {
+                        optOutput = Just arg
+                })
+                "FILE")
+        "Write net and properties to FILE"
+
         , Option "v" ["verbose"]
         (NoArg (\opt -> Right opt { optVerbosity = optVerbosity opt + 1 }))
         "Increase verbosity (may be specified more than once)"
@@ -144,9 +154,22 @@ parseArgs = do
                 return $ (,files) <$> foldl (>>=) (return startOptions) actions
             (_, _, errs) -> return $ Left $ concat errs
 
+writeFiles :: Int -> String -> PetriNet -> [Property] -> IO ()
+writeFiles verbosity basename net props = do
+        verbosePut verbosity 1 $ "Writing " ++ showNetName net ++ " to " ++ basename
+        writeFile basename $ printNet net
+        mapM_ (\(p,i) -> do
+                let file = basename ++ ".task" ++ show i
+                verbosePut verbosity 1 $ "Writing " ++ showPropertyName p ++
+                                         " to " ++ file
+                writeFile file $ printProperty p
+              ) (zip props [(1::Integer)..])
+
 checkFile :: Parser (PetriNet,[Property]) -> Int -> Bool ->
-            [ImplicitProperty] -> [NetTransformation] -> String -> IO Bool
-checkFile parser verbosity refine implicitProperties transformations file = do
+            [ImplicitProperty] -> [NetTransformation] ->
+            Maybe String -> String -> IO Bool
+checkFile parser verbosity refine implicitProperties transformations
+          output file = do
         verbosePut verbosity 0 $ "Reading \"" ++ file ++ "\""
         (net,props) <- parseFile parser file
         let props' = props ++ map (makeImplicitProperty net) implicitProperties
@@ -157,6 +180,9 @@ checkFile parser verbosity refine implicitProperties transformations file = do
                 "Transitions: " ++ show (length $ transitions net')
         verbosePut verbosity 3 $ show net'
         rs <- mapM (checkProperty verbosity net' refine) props''
+        case output of
+            Just outputfile -> writeFiles verbosity outputfile net' props''
+            Nothing -> return ()
         verbosePut verbosity 0 ""
         return $ and rs
 
@@ -305,7 +331,7 @@ main = do
                 let properties = reverse $ optProperties opts
                 let transformations = reverse $ optTransformations opts
                 rs <- mapM (checkFile parser verbosity refinement properties
-                                transformations) files
+                                transformations (optOutput opts)) files
                 if and rs then
                     exitSuccessWith "All properties satisfied."
                 else
