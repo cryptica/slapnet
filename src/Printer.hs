@@ -47,7 +47,7 @@ printFormula FTrue = "TRUE"
 printFormula FFalse = "FALSE"
 printFormula (Atom a) = printLinIneq a
 printFormula (Neg p) = "NOT " ++ "(" ++ printFormula p ++ ")"
-printFormula (p :&: q) = "(" ++ printFormula p ++ " AND " ++ printFormula q ++ ")"
+printFormula (p :&: q) = printFormula p ++ " AND " ++ printFormula q
 printFormula (p :|: q) = "(" ++ printFormula p ++ " OR " ++ printFormula q ++ ")"
 
 printProperty :: Property -> String
