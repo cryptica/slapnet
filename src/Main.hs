@@ -25,10 +25,8 @@ import Solver.SComponent
 data InputFormat = PNET | LOLA | TPN deriving (Show,Read)
 
 data ImplicitProperty = Termination
-                      | NoDeadlock | NoDeadlockUnless String
-                      | NoDeadlockUnlessFinal
+                      | NoDeadlock | NoDeadlockUnlessFinal
                       | ProperTermination
-                      | Workflow
                       | Safe | Bounded Integer
                       deriving (Show,Read)
 
@@ -63,12 +61,6 @@ options =
         (NoArg (\opt -> Right opt { inputFormat = TPN }))
         "Use the tpn input format"
 
-        , Option "" ["workflow"]
-        (NoArg (\opt -> Right opt {
-                   optProperties = Workflow : optProperties opt
-               }))
-        "Check that the net is a workflow net"
-
         , Option "" ["termination"]
         (NoArg (\opt -> Right opt {
                    optProperties = Termination : optProperties opt
@@ -93,14 +85,6 @@ options =
                }))
         ("Prove that there is no deadlock unless\n" ++
          "only final places are marked")
-
-        , Option "" ["no-deadlock-unless"]
-        (ReqArg (\arg opt -> Right opt {
-                   optProperties = NoDeadlockUnless arg : optProperties opt
-                })
-                "FILE")
-        ("Prove that there is no deadlock unless\n" ++
-         "the formula given in FILE is satisfied")
 
         , Option "" ["safe"]
         (NoArg (\opt -> Right opt {
@@ -159,7 +143,7 @@ checkFile parser verbosity refine implicitProperties file = do
         verbosePut verbosity 2 $
                 "Places: " ++ show (length  $ places net) ++ "\n" ++
                 "Transitions: " ++ show (length $ transitions net)
-        addedProperties <- mapM (makeImplicitProperty net) implicitProperties
+        let addedProperties = map (makeImplicitProperty net) implicitProperties
         rs <- mapM (checkProperty verbosity net refine)
                   (addedProperties ++ properties)
         verbosePut verbosity 0 ""
@@ -168,47 +152,33 @@ checkFile parser verbosity refine implicitProperties file = do
 placeOp :: Op -> (String, Integer) -> Formula
 placeOp op (p,w) = Atom $ LinIneq (Var p) op (Const w)
 
-makeImplicitProperty :: PetriNet -> ImplicitProperty -> IO Property
-makeImplicitProperty net Workflow = do
-        let sources = filter (null . lpre net) (places net)
-        let sinks = filter (null . lpost net) (places net)
-        putStrLn "Sources:"
-        print sources
-        putStrLn "Sinks:"
-        print sinks
-        return $ Property "workflow" Safety $
-            if length sources == 1 && length sinks == 1 then FFalse else FTrue
+makeImplicitProperty :: PetriNet -> ImplicitProperty -> Property
 makeImplicitProperty _ Termination =
-        return $ Property "termination" Liveness FTrue
-makeImplicitProperty net ProperTermination = do
+        Property "termination" Liveness FTrue
+makeImplicitProperty net ProperTermination =
         let (finals, nonfinals) = partition (null . lpost net) (places net)
-        return $ Property "proper termination" Safety
+        in  Property "proper termination" Safety
             (foldl (:|:) FFalse (map (\p -> placeOp Gt (p,0)) finals) :&:
              foldl (:|:) FFalse (map (\p -> placeOp Gt (p,0)) nonfinals))
 makeImplicitProperty net NoDeadlock =
-        return $ Property "no deadlock" Safety $
+        Property "no deadlock" Safety $
             foldl (:&:) FTrue
                 (map (foldl (:|:) FFalse . map (placeOp Lt) . lpre net)
                      (transitions net))
-makeImplicitProperty net NoDeadlockUnlessFinal = do
-        nodeadlock <- makeImplicitProperty net NoDeadlock
-        let (finals, nonfinals) = partition (null . lpost net) (places net)
-        return $ Property "no deadlock unless final" Safety $
+makeImplicitProperty net NoDeadlockUnlessFinal =
+        let nodeadlock = makeImplicitProperty net NoDeadlock
+            (finals, nonfinals) = partition (null . lpost net) (places net)
+        in  Property "no deadlock unless final" Safety $
             (foldl (:&:) FTrue  (map (\p -> placeOp Eq (p,0)) finals) :|:
              foldl (:|:) FFalse (map (\p -> placeOp Gt (p,0)) nonfinals)) :&:
             pformula nodeadlock
-makeImplicitProperty net (NoDeadlockUnless file) = do
-        nodeadlock <- makeImplicitProperty net NoDeadlock
-        property <- parseFile LOLA.parseFormula file
-        return $ Property "no deadlock unless" Safety $
-            Neg property :&: pformula nodeadlock
 makeImplicitProperty net (Bounded k) =
-        return $ Property (show k ++ "-bounded") Safety $
+        Property (show k ++ "-bounded") Safety $
             foldl (:|:) FFalse
                 (map (\p -> placeOp Gt (p,k)) (places net))
-makeImplicitProperty net Safe = do
-        bounded <- makeImplicitProperty net (Bounded 1)
-        return $ Property "safe" Safety $ pformula bounded
+makeImplicitProperty net Safe =
+        let bounded = makeImplicitProperty net (Bounded 1)
+        in  Property "safe" Safety $ pformula bounded
 
 checkProperty :: Int -> PetriNet -> Bool -> Property -> IO Bool
 checkProperty verbosity net refine p = do
