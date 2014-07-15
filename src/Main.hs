@@ -8,6 +8,7 @@ import System.IO
 import System.Console.GetOpt
 import Control.Monad
 import Control.Applicative ((<$>))
+import Control.Arrow (first)
 import Data.List (partition)
 
 import Parser
@@ -25,7 +26,8 @@ import Solver.SComponent
 
 data InputFormat = PNET | LOLA | TPN deriving (Show,Read)
 
-data NetTransformation = TerminationToReachability
+data NetTransformation = TerminationByReachability
+                       | ValidateIdentifiers
 
 data ImplicitProperty = Termination
                       | NoDeadlock | NoDeadlockUnlessFinal
@@ -68,9 +70,15 @@ options =
         (NoArg (\opt -> Right opt { inputFormat = TPN }))
         "Use the tpn input format"
 
+        , Option "" ["validate-identifiers"]
+        (NoArg (\opt -> Right opt {
+            optTransformations = ValidateIdentifiers : optTransformations opt
+          }))
+        "Make identifiers valid for lola"
+
         , Option "" ["termination-by-reachability"]
         (NoArg (\opt -> Right opt {
-            optTransformations = TerminationToReachability : optTransformations opt
+            optTransformations = TerminationByReachability : optTransformations opt
           }))
         "Prove termination by reducing it to reachability"
 
@@ -191,20 +199,19 @@ placeOp op (p,w) = Atom $ LinIneq (Var p) op (Const w)
 
 transformNet :: (PetriNet, [Property]) -> NetTransformation ->
                (PetriNet, [Property])
-transformNet (net, props) TerminationToReachability =
+transformNet (net, props) TerminationByReachability =
         let prime = ('\'':)
-            primeFst (p,x) = (prime p, x)
             ps = ["'sigma", "'m1", "'m2"] ++
                  places net ++ map prime (places net)
             is = [("'m1", 1)] ++
-                 initials net ++ map primeFst (initials net)
+                 initials net ++ map (first prime) (initials net)
             ts = ("'switch", [("'m1",1)], [("'m2",1)]) :
                  concatMap (\t ->
                     let (preT, postT) = context net t
-                        pre'  = [("'m1",1)] ++ preT  ++ map primeFst preT
-                        post' = [("'m1",1)] ++ postT ++ map primeFst postT
-                        pre''  = ("'m2",1) : map primeFst preT
-                        post'' = [("'m2",1), ("'sigma",1)] ++ map primeFst postT
+                        pre'  = [("'m1",1)] ++ preT  ++ map (first prime) preT
+                        post' = [("'m1",1)] ++ postT ++ map (first prime) postT
+                        pre''  = ("'m2",1) : map (first prime) preT
+                        post'' = [("'m2",1), ("'sigma",1)] ++ map (first prime) postT
                     in  [(t, pre', post'), (prime t, pre'', post'')]
                  )
                  (transitions net)
@@ -212,7 +219,17 @@ transformNet (net, props) TerminationToReachability =
                     foldl (:&:) (Atom (LinIneq (Var "'sigma") Ge (Const 1)))
                       (map (\p -> Atom (LinIneq (Var (prime p)) Ge (Var p)))
                         (places net))
+            -- TODO: map existing liveness properties
         in  (makePetriNetWithTrans (name net) ps ts is, prop : props)
+transformNet (net, props) ValidateIdentifiers =
+        let validate = map (\c -> if c `elem` ",;:(){}\t \n\r" then '_' else c)
+            ps = map validate $ places net
+            ts = map validate $ transitions net
+            is = map (first validate) $ initials net
+            as = map (\(a,b,x) -> (validate a, validate b, x)) $ arcs net
+            net' = makePetriNet (name net) ps ts as is
+            props' = map (rename validate) props
+        in  (net', props')
 
 makeImplicitProperty :: PetriNet -> ImplicitProperty -> Property
 makeImplicitProperty _ Termination =

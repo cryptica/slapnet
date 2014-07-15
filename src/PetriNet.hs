@@ -2,7 +2,7 @@
 
 module PetriNet
     (PetriNet,name,showNetName,places,transitions,initial,
-     pre,lpre,post,lpost,initials,context,
+     pre,lpre,post,lpost,initials,context,arcs,
      makePetriNet,makePetriNetWithTrans)
 where
 
@@ -18,6 +18,10 @@ data PetriNet = PetriNet {
 
 initial :: PetriNet -> String -> Integer
 initial net p = M.findWithDefault 0 p (initMap net)
+
+arcs :: PetriNet -> [(String, String, Integer)]
+arcs net = concatMap (\(a,(_,bs)) -> map (\(b,w) -> (a,b,w)) bs)
+                           (M.toList (adjacency net))
 
 context :: PetriNet -> String -> ([(String, Integer)], [(String, Integer)])
 context net x = M.findWithDefault ([],[]) x (adjacency net)
