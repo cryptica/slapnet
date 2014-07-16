@@ -19,7 +19,7 @@ results_other_tool=( positive negative error timeout )
 our_tool=slapnet
 
 benchmark_dirs=( 'ibm-soundness' ) # 'sap-reference' )
-benchmark_tools=( 'lola' 'lola' )
+benchmark_tools=( 'sara' )
 for (( benchmark=0;benchmark<${#benchmark_dirs[@]};benchmark++)); do
   benchmark_dir=${benchmark_dirs[$benchmark]}
   other_tool=${benchmark_tools[$benchmark]}

@@ -4,7 +4,7 @@
 #benchmarks=( 'sap-reference' )
 benchmarks=( 'ibm-soundness' )
 extensions=( 'pnet' 'tpn' 'lola' )
-executable='/home/philipp/local/lola-2.0/src/lola '
+executable='/home/philipp/local/lola-2.0/src/lola'
 
 for benchmark in ${benchmarks[@]}; do
   benchmark_dir="$benchmark"
@@ -15,11 +15,6 @@ for benchmark in ${benchmarks[@]}; do
   for ext in ${extensions[@]}; do
     for file in `find $benchmark_dir -name "*.$ext"`; do
       T="$(date +%s%N)"
-      if [ -e $benchmark_dir/final_marking.lola.safe.task ]; then
-          final=$benchmark_dir/final_marking.lola.safe.task
-      elif [ -e $file.safe.task ]; then
-          final=$file.safe.task
-      fi
       (
         set -o pipefail;
         $executable -f $file.terminating.task1 $file.terminating --markinglimit=1000000 2>&1 | tee $file.out

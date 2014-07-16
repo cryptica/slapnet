@@ -15,11 +15,6 @@ for benchmark in ${benchmarks[@]}; do
   for ext in ${extensions[@]}; do
     for file in `find $benchmark_dir -name "*.$ext"`; do
       T="$(date +%s%N)"
-      if [ -e $benchmark_dir/final_marking.lola.fin.task ]; then
-          final=$benchmark_dir/final_marking.lola.fin.task
-      elif [ -e $file.fin.task ]; then
-          final=$file.fin.task
-      fi
       (
         set -o pipefail;
         timeout 60 $executable --$ext --termination-by-reachability $file -o $file.terminating | tee $file.out
