@@ -41,7 +41,8 @@ printProperty :: String -> PetriNet -> Property -> String
 printProperty filename net (Property propname Safety f) =
         "PROBLEM " ++ validateId propname ++ ":\n" ++
         "GOAL REACHABILITY;\n" ++
-        "FILE " ++ filename ++ " TYPE LOLA;\n" ++
+        "FILE " ++ reverse (takeWhile (/='/') (reverse filename)) ++
+            " TYPE LOLA;\n" ++
         "INITIAL " ++ intercalate ","
             (map (\(p,i) -> p ++ ":" ++ show i) (initials net)) ++ ";\n" ++
         "FINAL COVER;\n" ++

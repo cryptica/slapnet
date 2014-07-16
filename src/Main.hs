@@ -222,7 +222,8 @@ transformNet (net, props) TerminationByReachability =
                  (transitions net)
             prop = Property "termination by reachability" Safety $
                     foldl (:&:) (Atom (LinIneq (Var "'sigma") Ge (Const 1)))
-                      (map (\p -> Atom (LinIneq (Var (prime p)) Ge (Var p)))
+                      (map (\p -> Atom (LinIneq
+                                (Var (prime p) :-: Var p) Ge (Const 0)))
                         (places net))
             -- TODO: map existing liveness properties
         in  (makePetriNetWithTrans (name net) ps ts is, prop : props)
