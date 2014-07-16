@@ -17,6 +17,8 @@ import qualified Parser.LOLA as LOLA
 import qualified Parser.TPN as TPN
 import PetriNet
 import Printer
+import qualified Printer.LOLA as LOLAPrinter
+import qualified Printer.SARA as SARAPrinter
 import Property
 import Solver
 import Solver.StateEquation
@@ -165,13 +167,16 @@ parseArgs = do
 writeFiles :: Int -> String -> PetriNet -> [Property] -> IO ()
 writeFiles verbosity basename net props = do
         verbosePut verbosity 1 $ "Writing " ++ showNetName net ++ " to " ++ basename
-        writeFile basename $ printNet net
+        writeFile basename $ LOLAPrinter.printNet net
         mapM_ (\(p,i) -> do
                 let file = basename ++ ".task" ++ show i
                 verbosePut verbosity 1 $ "Writing " ++ showPropertyName p ++
                                          " to " ++ file
-                writeFile file $ printProperty p
+                writeFile file $ LOLAPrinter.printProperty p
               ) (zip props [(1::Integer)..])
+        verbosePut verbosity 1 $ "Writing properties to " ++ basename ++ ".sara"
+        writeFile (basename ++ ".sara") $ unlines $
+                map (SARAPrinter.printProperty basename net) props
 
 checkFile :: Parser (PetriNet,[Property]) -> Int -> Bool ->
             [ImplicitProperty] -> [NetTransformation] ->
@@ -222,13 +227,12 @@ transformNet (net, props) TerminationByReachability =
             -- TODO: map existing liveness properties
         in  (makePetriNetWithTrans (name net) ps ts is, prop : props)
 transformNet (net, props) ValidateIdentifiers =
-        let validate = map (\c -> if c `elem` ",;:(){}\t \n\r" then '_' else c)
-            ps = map validate $ places net
-            ts = map validate $ transitions net
-            is = map (first validate) $ initials net
-            as = map (\(a,b,x) -> (validate a, validate b, x)) $ arcs net
+        let ps = map validateId $ places net
+            ts = map validateId $ transitions net
+            is = map (first validateId) $ initials net
+            as = map (\(a,b,x) -> (validateId a, validateId b, x)) $ arcs net
             net' = makePetriNet (name net) ps ts as is
-            props' = map (rename validate) props
+            props' = map (rename validateId) props
         in  (net', props')
 
 makeImplicitProperty :: PetriNet -> ImplicitProperty -> Property
