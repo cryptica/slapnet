@@ -32,7 +32,7 @@ data NetTransformation = TerminationByReachability
                        | ValidateIdentifiers
 
 data ImplicitProperty = Termination
-                      | NoDeadlock | NoDeadlockUnlessFinal
+                      | DeadlockFree | DeadlockFreeUnlessFinal
                       | ProperTermination
                       | Safe | Bounded Integer
                       deriving (Show,Read)
@@ -98,13 +98,13 @@ options =
 
         , Option "" ["deadlock-free"]
         (NoArg (\opt -> Right opt {
-                   optProperties = NoDeadlock : optProperties opt
+                   optProperties = DeadlockFree : optProperties opt
                }))
         "Prove that the net is deadlock-free"
 
         , Option "" ["deadlock-free-unless-final"]
         (NoArg (\opt -> Right opt {
-                   optProperties = NoDeadlockUnlessFinal : optProperties opt
+                   optProperties = DeadlockFreeUnlessFinal : optProperties opt
                }))
         ("Prove that the net is deadlock-free\n" ++
          "unless it is in the final marking")
@@ -174,9 +174,9 @@ writeFiles verbosity basename net props = do
                                          " to " ++ file
                 writeFile file $ LOLAPrinter.printProperty p
               ) (zip props [(1::Integer)..])
-        verbosePut verbosity 1 $ "Writing properties to " ++ basename ++ ".sara"
-        writeFile (basename ++ ".sara") $ unlines $
-                map (SARAPrinter.printProperty basename net) props
+        -- verbosePut verbosity 1 $ "Writing properties to " ++ basename ++ ".sara"
+        -- writeFile (basename ++ ".sara") $ unlines $
+        --        map (SARAPrinter.printProperty basename net) props
 
 checkFile :: Parser (PetriNet,[Property]) -> Int -> Bool ->
             [ImplicitProperty] -> [NetTransformation] ->
@@ -244,15 +244,15 @@ makeImplicitProperty net ProperTermination =
         in  Property "proper termination" Safety
             (foldl (:|:) FFalse (map (\p -> placeOp Gt (p,0)) finals) :&:
              foldl (:|:) FFalse (map (\p -> placeOp Gt (p,0)) nonfinals))
-makeImplicitProperty net NoDeadlock =
-        Property "no deadlock" Safety $
+makeImplicitProperty net DeadlockFree =
+        Property "deadlock-free" Safety $
             foldl (:&:) FTrue
                 (map (foldl (:|:) FFalse . map (placeOp Lt) . lpre net)
                      (transitions net))
-makeImplicitProperty net NoDeadlockUnlessFinal =
-        let nodeadlock = makeImplicitProperty net NoDeadlock
+makeImplicitProperty net DeadlockFreeUnlessFinal =
+        let nodeadlock = makeImplicitProperty net DeadlockFree
             (finals, nonfinals) = partition (null . lpost net) (places net)
-        in  Property "no deadlock unless final" Safety $
+        in  Property "deadlock-free unless final" Safety $
             (foldl (:&:) FTrue  (map (\p -> placeOp Eq (p,0)) finals) :|:
              foldl (:|:) FFalse (map (\p -> placeOp Gt (p,0)) nonfinals)) :&:
             pformula nodeadlock

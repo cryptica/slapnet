@@ -3,7 +3,8 @@
 #benchmarks=( 'ibm-soundness' 'sap-reference' )
 benchmarks=( 'sap-reference' )
 #benchmarks=( 'ibm-soundness' )
-extensions=( 'pnet' 'tpn' 'lola' )
+#extensions=( 'pnet' 'tpn' 'lola' )
+extensions=( 'tpn' )
 executable='../../slapnet'
 
 for benchmark in ${benchmarks[@]}; do
@@ -17,7 +18,7 @@ for benchmark in ${benchmarks[@]}; do
       T="$(date +%s%N)"
       (
         set -o pipefail;
-        timeout 60 $executable --$ext --validate-identifiers --termination-by-reachability -o $file.terminating $file | tee $file.out
+        timeout 60 $executable --$ext --no-refinement --deadlock-free-unless-final $file | tee $file.out
       )
       result=$?
       T=$(($(date +%s%N)-T))

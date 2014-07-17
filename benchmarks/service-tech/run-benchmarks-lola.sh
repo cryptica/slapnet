@@ -3,7 +3,8 @@
 #benchmarks=( 'ibm-soundness' 'sap-reference' )
 benchmarks=( 'sap-reference' )
 #benchmarks=( 'ibm-soundness' )
-extensions=( 'pnet' 'tpn' 'lola' )
+#extensions=( 'pnet' 'tpn' 'lola' )
+extensions=( 'tpn' )
 executable='/home/philipp/local/lola-2.0/src/lola'
 
 for benchmark in ${benchmarks[@]}; do
@@ -17,7 +18,7 @@ for benchmark in ${benchmarks[@]}; do
       T="$(date +%s%N)"
       (
         set -o pipefail;
-        $executable -f $file.terminating.task1 $file.terminating --markinglimit=1000000 2>&1 | tee $file.out
+        $executable -f $file.df.task1 $file.df --markinglimit=10000000 2>&1 | tee $file.out
       )
       result=$?
       ryes=$(grep "result: yes" $file.out)

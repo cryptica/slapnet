@@ -20,7 +20,7 @@ our_tool=slapnet
 
 #benchmark_dirs=( 'ibm-soundness' )
 benchmark_dirs=( 'sap-reference' )
-benchmark_tools=( 'sara' )
+benchmark_tools=( 'lola' )
 for (( benchmark=0;benchmark<${#benchmark_dirs[@]};benchmark++)); do
   benchmark_dir=${benchmark_dirs[$benchmark]}
   other_tool=${benchmark_tools[$benchmark]}
