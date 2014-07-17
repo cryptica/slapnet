@@ -1,7 +1,6 @@
 #!/bin/bash
 
-#benchmarks=( 'mist' 'wahl-kroening' 'soter' )
-benchmarks=( 'soter' )
+benchmarks=( 'mist' 'wahl-kroening' 'soter' )
 extensions=( 'spec' )
 executable='../../slapnet'
 
@@ -16,7 +15,7 @@ for benchmark in ${benchmarks[@]}; do
       T="$(date +%s%N)"
       (
         set -o pipefail;
-        timeout 60 $executable --$ext $file | tee $file.out
+        timeout 60 $executable --$ext --no-given-properties --termination-by-reachability -o $file.terminating $file | tee $file.out
       )
       result=$?
       T=$(($(date +%s%N)-T))

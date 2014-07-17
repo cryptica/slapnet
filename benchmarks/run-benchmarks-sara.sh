@@ -1,9 +1,8 @@
 #!/bin/bash
 
-#benchmarks=( 'ibm-soundness' 'sap-reference' )
-benchmarks=( 'sap-reference' )
-#benchmarks=( 'ibm-soundness' )
-extensions=( 'pnet' 'tpn' 'lola' )
+#benchmarks=( 'service-tech/ibm-soundness' 'service-tech/sap-reference' )
+benchmarks=( 'cav-benchmarks/mist' 'cav-benchmarks/wahl-kroening' 'cav-benchmarks/soter' )
+extensions=( 'pnet' 'tpn' 'lola' 'spec' )
 executable='/home/philipp/local/sara-1.0/src/sara'
 
 for benchmark in ${benchmarks[@]}; do

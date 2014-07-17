@@ -18,9 +18,9 @@ results_other_tool=( positive negative error timeout )
 
 our_tool=slapnet
 
-#benchmark_dirs=( 'ibm-soundness' )
-benchmark_dirs=( 'sap-reference' )
-benchmark_tools=( 'lola' )
+#benchmark_dirs=( 'service-tech/ibm-soundness' 'service-tech/sap-reference' )
+benchmark_dirs=( 'cav-benchmarks/mist' 'cav-benchmarks/wahl-kroening' 'cav-benchmarks/soter' )
+benchmark_tools=( 'sara' 'sara' 'sara ') # TODO: use positive/negative lists
 for (( benchmark=0;benchmark<${#benchmark_dirs[@]};benchmark++)); do
   benchmark_dir=${benchmark_dirs[$benchmark]}
   other_tool=${benchmark_tools[$benchmark]}

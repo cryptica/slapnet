@@ -1,11 +1,9 @@
 #!/bin/bash
 
-#benchmarks=( 'ibm-soundness' 'sap-reference' )
-benchmarks=( 'sap-reference' )
-#benchmarks=( 'ibm-soundness' )
-#extensions=( 'pnet' 'tpn' 'lola' )
-extensions=( 'tpn' )
-executable='../../slapnet'
+#benchmarks=( 'service-tech/ibm-soundness' 'service-tech/sap-reference' )
+benchmarks=( 'cav-benchmarks/mist' 'cav-benchmarks/wahl-kroening' 'cav-benchmarks/soter' )
+extensions=( 'pnet' 'tpn' 'lola' 'spec' )
+executable='../slapnet'
 
 for benchmark in ${benchmarks[@]}; do
   benchmark_dir="$benchmark"
