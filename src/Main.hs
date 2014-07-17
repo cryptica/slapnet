@@ -46,6 +46,7 @@ data Options = Options { inputFormat :: InputFormat
                        , optTransformations :: [NetTransformation]
                        , optRefine :: Bool
                        , optOutput :: Maybe String
+                       , optUseProperties :: Bool
                        }
 
 startOptions :: Options
@@ -57,6 +58,7 @@ startOptions = Options { inputFormat = PNET
                        , optTransformations = []
                        , optRefine = True
                        , optOutput = Nothing
+                       , optUseProperties = True
                        }
 
 options :: [ OptDescr (Options -> Either String Options) ]
@@ -140,6 +142,12 @@ options =
                 "FILE")
         "Write net and properties to FILE"
 
+        , Option "" ["no-given-properties"]
+        (NoArg (\opt -> Right opt {
+                   optUseProperties = False
+               }))
+        "Do not use the properties given in the input file"
+
         , Option "v" ["verbose"]
         (NoArg (\opt -> Right opt { optVerbosity = optVerbosity opt + 1 }))
         "Increase verbosity (may be specified more than once)"
@@ -185,21 +193,22 @@ writeFiles verbosity basename net props = do
 
 checkFile :: Parser (PetriNet,[Property]) -> Int -> Bool ->
             [ImplicitProperty] -> [NetTransformation] ->
-            Maybe String -> String -> IO Bool
+            Bool -> Maybe String -> String -> IO Bool
 checkFile parser verbosity refine implicitProperties transformations
-          output file = do
+          useProperties output file = do
         verbosePut verbosity 0 $ "Reading \"" ++ file ++ "\""
         (net,props) <- parseFile parser file
-        let props' = props ++ map (makeImplicitProperty net) implicitProperties
-        let (net',props'') = foldl transformNet (net,props') transformations
+        let props' = if useProperties then props else []
+        let props'' = props' ++ map (makeImplicitProperty net) implicitProperties
+        let (net',props''') = foldl transformNet (net,props'') transformations
         verbosePut verbosity 1 $ "Analyzing " ++ showNetName net
         verbosePut verbosity 2 $
                 "Places: " ++ show (length  $ places net') ++ "; " ++
                 "Transitions: " ++ show (length $ transitions net')
         verbosePut verbosity 3 $ show net'
-        rs <- mapM (checkProperty verbosity net' refine) props''
+        rs <- mapM (checkProperty verbosity net' refine) props'''
         case output of
-            Just outputfile -> writeFiles verbosity outputfile net' props''
+            Just outputfile -> writeFiles verbosity outputfile net' props'''
             Nothing -> return ()
         verbosePut verbosity 0 ""
         return $ and rs
@@ -359,7 +368,8 @@ main = do
                 let properties = reverse $ optProperties opts
                 let transformations = reverse $ optTransformations opts
                 rs <- mapM (checkFile parser verbosity refinement properties
-                                transformations (optOutput opts)) files
+                     transformations (optUseProperties opts) (optOutput opts))
+                     files
                 if and rs then
                     exitSuccessWith "All properties satisfied."
                 else
