@@ -1,8 +1,8 @@
 #!/bin/bash
 
 #benchmarks=( 'ibm-soundness' 'sap-reference' )
-#benchmarks=( 'sap-reference' )
-benchmarks=( 'ibm-soundness' )
+benchmarks=( 'sap-reference' )
+#benchmarks=( 'ibm-soundness' )
 extensions=( 'pnet' 'tpn' 'lola' )
 executable='/home/philipp/local/sara-1.0/src/sara'
 
@@ -18,6 +18,7 @@ for benchmark in ${benchmarks[@]}; do
       pushd .
       cd $(dirname $file)
       base=$(basename $file)
+      echo "testing $file with $base"
       (
         set -o pipefail;
         timeout 60 $executable -i $base.terminating.sara 2>&1 | tee $base.out

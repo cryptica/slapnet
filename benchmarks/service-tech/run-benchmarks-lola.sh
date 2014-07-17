@@ -1,8 +1,8 @@
 #!/bin/bash
 
 #benchmarks=( 'ibm-soundness' 'sap-reference' )
-#benchmarks=( 'sap-reference' )
-benchmarks=( 'ibm-soundness' )
+benchmarks=( 'sap-reference' )
+#benchmarks=( 'ibm-soundness' )
 extensions=( 'pnet' 'tpn' 'lola' )
 executable='/home/philipp/local/lola-2.0/src/lola'
 
