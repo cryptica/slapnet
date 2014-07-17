@@ -15,6 +15,7 @@ import Parser
 import qualified Parser.PNET as PNET
 import qualified Parser.LOLA as LOLA
 import qualified Parser.TPN as TPN
+import qualified Parser.MIST as MIST
 import PetriNet
 import Printer
 import qualified Printer.LOLA as LOLAPrinter
@@ -26,7 +27,7 @@ import Solver.TrapConstraints
 import Solver.TransitionInvariant
 import Solver.SComponent
 
-data InputFormat = PNET | LOLA | TPN deriving (Show,Read)
+data InputFormat = PNET | LOLA | TPN | MIST deriving (Show,Read)
 
 data NetTransformation = TerminationByReachability
                        | ValidateIdentifiers
@@ -71,6 +72,10 @@ options =
         , Option "" ["tpn"]
         (NoArg (\opt -> Right opt { inputFormat = TPN }))
         "Use the tpn input format"
+
+        , Option "" ["spec"]
+        (NoArg (\opt -> Right opt { inputFormat = MIST }))
+        "Use the mist input format"
 
         , Option "" ["validate-identifiers"]
         (NoArg (\opt -> Right opt {
@@ -174,9 +179,9 @@ writeFiles verbosity basename net props = do
                                          " to " ++ file
                 writeFile file $ LOLAPrinter.printProperty p
               ) (zip props [(1::Integer)..])
-        -- verbosePut verbosity 1 $ "Writing properties to " ++ basename ++ ".sara"
-        -- writeFile (basename ++ ".sara") $ unlines $
-        --        map (SARAPrinter.printProperty basename net) props
+        verbosePut verbosity 1 $ "Writing properties to " ++ basename ++ ".sara"
+        writeFile (basename ++ ".sara") $ unlines $
+                map (SARAPrinter.printProperty basename net) props
 
 checkFile :: Parser (PetriNet,[Property]) -> Int -> Bool ->
             [ImplicitProperty] -> [NetTransformation] ->
@@ -350,6 +355,7 @@ main = do
                                  PNET -> PNET.parseContent
                                  LOLA -> LOLA.parseContent
                                  TPN -> TPN.parseContent
+                                 MIST -> MIST.parseContent
                 let properties = reverse $ optProperties opts
                 let transformations = reverse $ optTransformations opts
                 rs <- mapM (checkFile parser verbosity refinement properties
