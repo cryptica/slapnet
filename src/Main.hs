@@ -305,7 +305,7 @@ checkSafetyProperty verbosity net refine f traps = do
                     rt <- checkSat $ checkTrapSat net assigned
                     case rt of
                         Nothing -> do
-                            putStrLn "No trap found."
+                            verbosePut verbosity 1 "No trap found."
                             return False
                         Just at -> do
                             let trap = trapFromAssignment at
