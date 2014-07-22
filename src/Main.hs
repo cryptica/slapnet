@@ -224,35 +224,42 @@ transformNet (net, props) TerminationByReachability =
                  places net ++ map prime (places net)
             is = [("'m1", 1)] ++
                  initials net ++ map (first prime) (initials net)
+            transformTransition t =
+                let (preT, postT) = context net t
+                    pre'  = [("'m1",1)] ++ preT  ++ map (first prime) preT
+                    post' = [("'m1",1)] ++ postT ++ map (first prime) postT
+                    pre''  = ("'m2",1) : map (first prime) preT
+                    post'' = [("'m2",1), ("'sigma",1)] ++ map (first prime) postT
+                in  if t `elem` ghostTransitions net then
+                        [(t, pre', post')]
+                    else
+                        [(t, pre', post'), (prime t, pre'', post'')]
             ts = ("'switch", [("'m1",1)], [("'m2",1)]) :
-                 concatMap (\t ->
-                    let (preT, postT) = context net t
-                        pre'  = [("'m1",1)] ++ preT  ++ map (first prime) preT
-                        post' = [("'m1",1)] ++ postT ++ map (first prime) postT
-                        pre''  = ("'m2",1) : map (first prime) preT
-                        post'' = [("'m2",1), ("'sigma",1)] ++ map (first prime) postT
-                    in  [(t, pre', post'), (prime t, pre'', post'')]
-                 )
-                 (transitions net)
+                 concatMap transformTransition (transitions net)
+            gs = ghostTransitions net
             prop = Property "termination by reachability" Safety $
                     foldl (:&:) (Atom (LinIneq (Var "'sigma") Ge (Const 1)))
                       (map (\p -> Atom (LinIneq
                                 (Var (prime p) :-: Var p) Ge (Const 0)))
                         (places net))
             -- TODO: map existing liveness properties
-        in  (makePetriNetWithTrans (name net) ps ts is, prop : props)
+        in  (makePetriNetWithTrans (name net) ps ts is gs, prop : props)
 transformNet (net, props) ValidateIdentifiers =
         let ps = map validateId $ places net
             ts = map validateId $ transitions net
             is = map (first validateId) $ initials net
             as = map (\(a,b,x) -> (validateId a, validateId b, x)) $ arcs net
-            net' = makePetriNet (name net) ps ts as is
+            gs = map validateId $ ghostTransitions net
+            net' = makePetriNet (name net) ps ts as is gs
             props' = map (rename validateId) props
         in  (net', props')
 
 makeImplicitProperty :: PetriNet -> ImplicitProperty -> Property
-makeImplicitProperty _ Termination =
-        Property "termination" Liveness FTrue
+makeImplicitProperty net Termination =
+        Property "termination" Liveness $
+            foldl (:&:) FTrue
+                (map (\t -> Atom (LinIneq (Var t) Eq (Const 0)))
+                    (ghostTransitions net))
 makeImplicitProperty net ProperTermination =
         let (finals, nonfinals) = partition (null . lpost net) (places net)
         in  Property "proper termination" Safety

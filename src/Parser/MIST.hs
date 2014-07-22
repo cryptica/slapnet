@@ -58,6 +58,7 @@ net = do
         reserved "init"
         (is,initTrans) <- initial
         return $ makePetriNetWithTrans "" ps (initTrans ++ ts) is
+                 [t | (t,_,_) <- initTrans]
 
 prop :: Parser Property
 prop = do
@@ -85,8 +86,7 @@ transition = do
         lhs <- commaSep ((,) <$> identifier <* reservedOp ">=" <*> integer)
         reservedOp "->"
         rhs <- commaSep transitionAssignment
-        let rhs' = filter ((/=0) . snd) $
-                   map (\xs -> (fst (head xs), sum (map snd xs))) $
+        let rhs' = map (\xs -> (fst (head xs), sum (map snd xs))) $
                    groupBy ((==) `on` fst) $
                    sortBy (comparing fst) $
                    lhs ++ rhs
@@ -112,7 +112,7 @@ initial = do
         let covered = [x | (x,_,True) <- xs]
         let initTrans = map (\(i,x) -> ("'init" ++ show i, [], [(x,1)]))
                             ([(1::Integer)..] `zip` covered)
-        return (filter ((/=0) . snd) inits, initTrans)
+        return (inits, initTrans)
 
 initState :: Parser (String, Integer, Bool)
 initState = do
