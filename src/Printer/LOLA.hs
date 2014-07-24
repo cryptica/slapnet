@@ -1,56 +1,69 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Printer.LOLA
     (printNet,printProperty)
 where
 
-import Data.List (intercalate)
+import qualified Data.ByteString.Lazy as L
+import Data.ByteString.Builder
+import Data.Monoid
 
+import Printer
 import PetriNet
 import Property
 
-printNet :: PetriNet -> String
-printNet net =
-        let showWeight (p,x) = p ++ ":" ++ show x
-            ps = "PLACE " ++ intercalate "," (places net) ++ ";\n"
-            is = "MARKING " ++ intercalate ","
-                    (map showWeight (initials net)) ++ ";\n"
+renderNet :: PetriNet -> Builder
+renderNet net =
+        let showWeight (p,x) = stringUtf8 p <> ":" <> integerDec x
+            ps = "PLACE " <> intercalate ","
+                    (map stringUtf8 (places net)) <> ";\n"
+            is = "MARKING " <> intercalate ","
+                    (map showWeight (initials net)) <> ";\n"
             makeTransition t =
                 let (preT,postT) = context net t
-                    preS = "CONSUME " ++ intercalate ","
-                                (map showWeight preT) ++ ";\n"
-                    postS = "PRODUCE " ++ intercalate ","
-                                (map showWeight postT) ++ ";\n"
-                in  "TRANSITION " ++ t ++ "\n" ++ preS ++ postS
+                    preS = "CONSUME " <> intercalate ","
+                                (map showWeight preT) <> ";\n"
+                    postS = "PRODUCE " <> intercalate ","
+                                (map showWeight postT) <> ";\n"
+                in  "TRANSITION " <> stringUtf8 t <> "\n" <> preS <> postS
             ts = map makeTransition (transitions net)
-        in  unlines (ps:is:ts)
+        in  intercalate "\n" (ps:is:ts)
 
-printTerm :: Term -> String
-printTerm (Var x) = x
-printTerm (Const c) = show c
-printTerm (Minus t) = "-" ++ printTerm t
-printTerm (t :+: u) = "(" ++ printTerm t ++ " + " ++ printTerm u ++ ")"
-printTerm (t :-: u) = "(" ++ printTerm t ++ " - " ++ printTerm u ++ ")"
-printTerm (t :*: u) = printTerm t ++ " * " ++ printTerm u
+printNet :: PetriNet -> L.ByteString
+printNet = toLazyByteString . renderNet
 
-printOp :: Op -> String
-printOp Gt = " > "
-printOp Ge = " >= "
-printOp Eq = " = "
-printOp Ne = " != "
-printOp Le = " <= "
-printOp Lt = " < "
+renderTerm :: Term -> Builder
+renderTerm (Var x) = stringUtf8 x
+renderTerm (Const c) = integerDec c
+renderTerm (Minus t) = "-" <> renderTerm t
+renderTerm (t :+: u) = "(" <> renderTerm t <> " + " <> renderTerm u <> ")"
+renderTerm (t :-: u) = "(" <> renderTerm t <> " - " <> renderTerm u <> ")"
+renderTerm (t :*: u) = renderTerm t <> " * " <> renderTerm u
 
-printLinIneq :: LinearInequation -> String
-printLinIneq (LinIneq lhs op rhs) = printTerm lhs ++ printOp op ++ printTerm rhs
+renderOp :: Op -> Builder
+renderOp Gt = " > "
+renderOp Ge = " >= "
+renderOp Eq = " = "
+renderOp Ne = " != "
+renderOp Le = " <= "
+renderOp Lt = " < "
 
-printFormula :: Formula -> String
-printFormula FTrue = "TRUE"
-printFormula FFalse = "FALSE"
-printFormula (Atom a) = printLinIneq a
-printFormula (Neg p) = "NOT " ++ "(" ++ printFormula p ++ ")"
-printFormula (p :&: q) = printFormula p ++ " AND " ++ printFormula q
-printFormula (p :|: q) = "(" ++ printFormula p ++ " OR " ++ printFormula q ++ ")"
+renderLinIneq :: LinearInequation -> Builder
+renderLinIneq (LinIneq lhs op rhs) =
+        renderTerm lhs <> renderOp op <> renderTerm rhs
 
-printProperty :: Property -> String
-printProperty (Property _ Safety f) = "EF (" ++ printFormula f ++ ")\n"
-printProperty (Property _ Liveness _) =
+renderFormula :: Formula -> Builder
+renderFormula FTrue = "TRUE"
+renderFormula FFalse = "FALSE"
+renderFormula (Atom a) = renderLinIneq a
+renderFormula (Neg p) = "NOT " <> "(" <> renderFormula p <> ")"
+renderFormula (p :&: q) = renderFormula p <> " AND " <> renderFormula q
+renderFormula (p :|: q) = "(" <> renderFormula p <> " OR " <> renderFormula q <> ")"
+
+renderProperty :: Property -> Builder
+renderProperty (Property _ Safety f) = "EF (" <> renderFormula f <> ")\n"
+renderProperty (Property _ Liveness _) =
         error "liveness property not supported for lola"
+
+printProperty :: Property -> L.ByteString
+printProperty = toLazyByteString . renderProperty

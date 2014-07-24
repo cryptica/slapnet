@@ -10,6 +10,7 @@ import Control.Monad
 import Control.Applicative ((<$>))
 import Control.Arrow (first)
 import Data.List (partition)
+import qualified Data.ByteString.Lazy as L
 
 import Parser
 import qualified Parser.PNET as PNET
@@ -180,16 +181,16 @@ parseArgs = do
 writeFiles :: Int -> String -> PetriNet -> [Property] -> IO ()
 writeFiles verbosity basename net props = do
         verbosePut verbosity 1 $ "Writing " ++ showNetName net ++ " to " ++ basename
-        writeFile basename $ LOLAPrinter.printNet net
+        L.writeFile basename $ LOLAPrinter.printNet net
         mapM_ (\(p,i) -> do
                 let file = basename ++ ".task" ++ show i
                 verbosePut verbosity 1 $ "Writing " ++ showPropertyName p ++
                                          " to " ++ file
-                writeFile file $ LOLAPrinter.printProperty p
+                L.writeFile file $ LOLAPrinter.printProperty p
               ) (zip props [(1::Integer)..])
         verbosePut verbosity 1 $ "Writing properties to " ++ basename ++ ".sara"
-        writeFile (basename ++ ".sara") $ unlines $
-                map (SARAPrinter.printProperty basename net) props
+        L.writeFile (basename ++ ".sara") $
+            SARAPrinter.printProperties basename net props
 
 checkFile :: Parser (PetriNet,[Property]) -> Int -> Bool ->
             [ImplicitProperty] -> [NetTransformation] ->
@@ -206,10 +207,10 @@ checkFile parser verbosity refine implicitProperties transformations
                 "Places: " ++ show (length  $ places net') ++ "; " ++
                 "Transitions: " ++ show (length $ transitions net')
         verbosePut verbosity 3 $ show net'
-        rs <- mapM (checkProperty verbosity net' refine) props'''
         case output of
             Just outputfile -> writeFiles verbosity outputfile net' props'''
             Nothing -> return ()
+        rs <- mapM (checkProperty verbosity net' refine) props'''
         verbosePut verbosity 0 ""
         return $ and rs
 
