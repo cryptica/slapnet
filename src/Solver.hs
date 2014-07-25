@@ -2,7 +2,8 @@
 
 module Solver
     (checkSat,checkSatInt,checkSatBool,MModelS,MModelI,MModelB,
-     MModel(..),mVal,mValues,mElemsWith,mElemSum,CModel(..),
+     MModel(..),mVal,mValues,mElemsWith,mElemSum,mElem,mNotElem,
+     cElem,cNotElem,
      Z3Type(..),mkOr',mkAnd',mkAdd',mkSub',mkMul')
 where
 
@@ -40,11 +41,23 @@ mVal m x = M.findWithDefault (error ("key not found: " ++ x)) x (getMap m)
 mValues :: MModel a -> [a]
 mValues m = M.elems $ getMap m
 
+mElem :: MModelS -> String -> Z3 AST
+mElem m x = (mVal m x `mkGt`) =<< mkInt (0::Integer)
+
+mNotElem :: MModelS -> String -> Z3 AST
+mNotElem m x = mkEq (mVal m x) =<< mkInt (0::Integer)
+
 mElemsWith :: (a -> Bool) -> MModel a -> [String]
 mElemsWith f m = M.keys $ M.filter f $ getMap m
 
-mElemSum :: (Num a) => MModel a -> [String] -> a
-mElemSum m xs = sum $ map (mVal m) xs
+mElemSum :: MModelS -> [String] -> Z3 AST
+mElemSum m xs = mkAdd' $ map (mVal m) xs
+
+cElem :: MModelI -> String -> Bool
+cElem m x = mVal m x > 0
+
+cNotElem :: MModelI -> String -> Bool
+cNotElem m x = mVal m x == 0
 
 mkOr' :: [AST] -> Z3 AST
 mkOr' [] = mkFalse
@@ -65,28 +78,6 @@ mkSub' xs = mkSub xs
 mkMul' :: [AST] -> Z3 AST
 mkMul' [] = mkInt (1::Integer)
 mkMul' xs = mkMul xs
-
---class SMModel a where
---        mElem :: MModel a -> String -> Z3 AST
---        mNotElem :: MModel a -> String -> Z3 AST
---        mNotElem m x = mkNot =<< mElem m x
-class CModel a where
-        cElem :: MModel a -> String -> Bool
-        cNotElem :: MModel a -> String -> Bool
-        cNotElem m x = not $ cElem m x
-
---instance SMModel AST where
---        mElem m x = (mVal m x `mkGt`) =<< mkInt 0
---        mNotElem m x = mkEq (mVal m x) =<< mkInt 0
---instance SMModel AST where
---        mElem = mVal
---        mNotElem m x = mkNot $ mVal m x
-instance CModel Integer where
-        cElem m x = mVal m x > 0
-        cNotElem m x = mVal m x == 0
-instance CModel Bool where
-        cElem = mVal
-        cNotElem m x = not $ mVal m x
 
 checkSat :: Z3Type a => Z3 Sort -> ([String], MModel AST -> Z3 ()) ->
         Z3 (Maybe (MModel a))

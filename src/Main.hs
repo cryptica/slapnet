@@ -26,7 +26,7 @@ import Solver
 import Solver.StateEquation
 import Solver.TrapConstraints
 import Solver.TransitionInvariant
---import Solver.SComponent
+import Solver.SComponent
 
 data InputFormat = PNET | LOLA | TPN | MIST deriving (Show,Read)
 
@@ -339,17 +339,17 @@ checkLivenessProperty verbosity net refine f strans = do
                 verbosePut verbosity 2 $ "Transitions fired: " ++ show fired
                 verbosePut verbosity 3 $ "Assignment: " ++ show ax
                 if refine then do
-                    rt <- return Nothing -- checkSat $ checkSComponentSat net fired ax
+                    rt <- checkSatInt $ checkSComponentSat net fired ax
                     case rt of
                         Nothing -> do
                             verbosePut verbosity 1 "No S-component found"
                             return False
                         Just as -> do
-                            let sOutIn = undefined -- getSComponentOutIn net ax as
---                            verbosePut verbosity 1 "S-component found"
---                            verbosePut verbosity 2 $ "Out/In: " ++ show sOutIn
---                            verbosePut verbosity 3 $ "S-Component assignment: " ++
---                                                      show as
+                            let sOutIn = getSComponentOutIn net ax as
+                            verbosePut verbosity 1 "S-component found"
+                            verbosePut verbosity 2 $ "Out/In: " ++ show sOutIn
+                            verbosePut verbosity 3 $ "S-Component assignment: " ++
+                                                      show as
                             checkLivenessProperty verbosity net refine f
                                                   (sOutIn:strans)
                 else
