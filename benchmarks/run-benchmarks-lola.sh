@@ -16,7 +16,7 @@ for benchmark in ${benchmarks[@]}; do
       T="$(date +%s%N)"
       (
         set -o pipefail;
-        $executable -f $file.df.task1 $file.df --markinglimit=10000000 2>&1 | tee $file.out
+        $executable -f $file.terminating.task1 $file.terminating --markinglimit=1000000 2>&1 | tee $file.out
       )
       result=$?
       ryes=$(grep "result: yes" $file.out)
