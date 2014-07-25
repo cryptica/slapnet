@@ -2,35 +2,49 @@ module Solver.Formula
     (evaluateFormula)
 where
 
-import Data.SBV
+import Z3.Monad
 
 import Property
 import Solver
 
-evaluateTerm :: Term -> ModelSI -> SInteger
-evaluateTerm (Var x) m = mVal m x
-evaluateTerm (Const c) _ = literal c
-evaluateTerm (Minus t) m = - evaluateTerm t m
-evaluateTerm (t :+: u) m = evaluateTerm t m + evaluateTerm u m
-evaluateTerm (t :-: u) m = evaluateTerm t m - evaluateTerm u m
-evaluateTerm (t :*: u) m = evaluateTerm t m * evaluateTerm u m
+evaluateTerm :: Term -> MModelS -> Z3 AST
+evaluateTerm (Var x) m = return $ mVal m x
+evaluateTerm (Const c) _ = mkInt c
+evaluateTerm (Minus t) m = mkUnaryMinus =<< evaluateTerm t m
+evaluateTerm (t :+: u) m = evalBinaryTerm m mkAdd t u
+evaluateTerm (t :-: u) m = evalBinaryTerm m mkSub t u
+evaluateTerm (t :*: u) m = evalBinaryTerm m mkMul t u
 
-opToFunction :: Op -> SInteger -> SInteger -> SBool
-opToFunction Gt = (.>)
-opToFunction Ge = (.>=)
-opToFunction Eq = (.==)
-opToFunction Ne = (./=)
-opToFunction Le = (.<=)
-opToFunction Lt = (.<)
+evalBinaryTerm :: MModelS -> ([AST] -> Z3 AST) -> Term -> Term -> Z3 AST
+evalBinaryTerm m op t u = do
+        t' <- evaluateTerm t m
+        u' <- evaluateTerm u m
+        op [t',u']
 
-evaluateLinIneq :: LinearInequation -> ModelSI -> SBool
-evaluateLinIneq (LinIneq lhs op rhs) m =
-        opToFunction op (evaluateTerm lhs m) (evaluateTerm rhs m)
+opToFunction :: Op -> AST -> AST -> Z3 AST
+opToFunction Gt = mkGt
+opToFunction Ge = mkGe
+opToFunction Eq = mkEq
+opToFunction Ne = \a b -> mkNot =<< mkEq a b
+opToFunction Le = mkLe
+opToFunction Lt = mkLt
 
-evaluateFormula :: Formula -> ModelSI -> SBool
-evaluateFormula FTrue _ = true
-evaluateFormula FFalse _ = false
+evaluateLinIneq :: LinearInequation -> MModelS -> Z3 AST
+evaluateLinIneq (LinIneq lhs op rhs) m = do
+        lhs' <- evaluateTerm lhs m
+        rhs' <- evaluateTerm rhs m
+        opToFunction op lhs' rhs'
+
+evaluateFormula :: Formula -> MModelS -> Z3 AST
+evaluateFormula FTrue _ = mkTrue
+evaluateFormula FFalse _ = mkFalse
 evaluateFormula (Atom a) m = evaluateLinIneq a m
-evaluateFormula (Neg p) m = bnot $ evaluateFormula p m
-evaluateFormula (p :&: q) m = evaluateFormula p m &&& evaluateFormula q m
-evaluateFormula (p :|: q) m = evaluateFormula p m ||| evaluateFormula q m
+evaluateFormula (Neg p) m = mkNot =<< evaluateFormula p m
+evaluateFormula (p :&: q) m = do
+        p' <- evaluateFormula p m
+        q' <- evaluateFormula q m
+        mkAnd [p',q']
+evaluateFormula (p :|: q) m = do
+        p' <- evaluateFormula p m
+        q' <- evaluateFormula q m
+        mkOr [p',q']
