@@ -25,7 +25,7 @@ import Property
 import Solver
 import Solver.StateEquation
 import Solver.TrapConstraints
---import Solver.TransitionInvariant
+import Solver.TransitionInvariant
 --import Solver.SComponent
 
 data InputFormat = PNET | LOLA | TPN | MIST deriving (Show,Read)
@@ -330,14 +330,14 @@ checkSafetyProperty verbosity net refine f traps = do
 checkLivenessProperty :: Int -> PetriNet -> Bool ->
         Formula -> [([String],[String])] -> IO Bool
 checkLivenessProperty verbosity net refine f strans = do
-        r <- return Nothing -- checkSatInt $ checkTransitionInvariantSat net f strans
+        r <- checkSatInt $ checkTransitionInvariantSat net f strans
         case r of
             Nothing -> return True
             Just ax -> do
-                let fired = [] -- firedTransitionsFromAssignment ax
+                let fired = firedTransitionsFromAssignment ax
                 verbosePut verbosity 1 "Assignment found"
---                verbosePut verbosity 2 $ "Transitions fired: " ++ show fired
---                verbosePut verbosity 3 $ "Assignment: " ++ show ax
+                verbosePut verbosity 2 $ "Transitions fired: " ++ show fired
+                verbosePut verbosity 3 $ "Assignment: " ++ show ax
                 if refine then do
                     rt <- return Nothing -- checkSat $ checkSComponentSat net fired ax
                     case rt of

@@ -3,47 +3,56 @@ module Solver.TransitionInvariant
      firedTransitionsFromAssignment)
 where
 
-import Data.SBV
+import Z3.Monad
+import Control.Monad
 
 import PetriNet
 import Property
 import Solver
 import Solver.Formula
 
-tInvariantConstraints :: PetriNet -> ModelSI -> SBool
+tInvariantConstraints :: PetriNet -> MModelS -> Z3 ()
 tInvariantConstraints net m =
-            bAnd $ map checkTransitionEquation $ places net
-        where checkTransitionEquation p =
-                let incoming = map addTransition $ lpre net p
-                    outgoing = map addTransition $ lpost net p
-                in  sum incoming - sum outgoing .>= 0
-              addTransition (t,w) = literal w * mVal m t
+            mapM_ (assertCnstr <=< checkTransitionEquation) $ places net
+        where checkTransitionEquation p = do
+                incoming <- mapM (addTransition   1 ) $ lpre net p
+                outgoing <- mapM (addTransition (-1)) $ lpost net p
+                sums <- mkAdd' (incoming ++ outgoing)
+                mkGe sums =<< mkVal (0::Integer)
+              addTransition fac (t,w) =
+                  mkVal (fac*w) >>= \w' -> mkMul [w', mVal m t]
 
-finalInvariantConstraints :: ModelSI -> SBool
-finalInvariantConstraints m = sum (mValues m) .> 0
+finalInvariantConstraints :: MModelS -> Z3 ()
+finalInvariantConstraints m = do
+        sums <- mkAdd' (mValues m)
+        assertCnstr =<< mkGt sums =<< mkVal (0::Integer)
 
-nonnegativityConstraints :: ModelSI -> SBool
-nonnegativityConstraints m = bAnd $ map (.>= 0) $ mValues m
+nonnegativityConstraints :: MModelS -> Z3 ()
+nonnegativityConstraints m = mapM_ (assertCnstr <=< geZero) $ mValues m
+        where geZero v = mkGe v =<< mkVal (0::Integer)
 
-checkSComponentTransitions :: [([String],[String])] -> ModelSI -> SBool
-checkSComponentTransitions strans m = bAnd $ map checkInOut strans
-        where checkInOut (sOut,sIn) =
-                bAnd (map (\t -> mVal m t .> 0) sOut) ==>
-                bOr (map (\t -> mVal m t .> 0) sIn)
+checkSComponentTransitions :: [([String],[String])] -> MModelS -> Z3 ()
+checkSComponentTransitions strans m = mapM_ (assertCnstr <=< checkInOut) strans
+        where checkInOut (sOut,sIn) = do
+                lhs <- mkAnd' =<<
+                        mapM (\t -> mkGt (mVal m t) =<< mkVal (0::Integer)) sOut
+                rhs <- mkOr'  =<<
+                        mapM (\t -> mkGt (mVal m t) =<< mkVal (0::Integer)) sIn
+                mkImplies lhs rhs
 
 checkTransitionInvariant :: PetriNet -> Formula -> [([String],[String])] ->
-        ModelSI -> SBool
-checkTransitionInvariant net f strans m =
-        tInvariantConstraints net m &&&
-        nonnegativityConstraints m &&&
-        finalInvariantConstraints m &&&
-        checkSComponentTransitions strans m &&&
-        evaluateFormula f m
+        MModelS -> Z3 ()
+checkTransitionInvariant net f strans m = do
+        tInvariantConstraints net m
+        nonnegativityConstraints m
+        finalInvariantConstraints m
+        checkSComponentTransitions strans m
+        assertCnstr =<< evaluateFormula f m
 
 checkTransitionInvariantSat :: PetriNet -> Formula -> [([String],[String])] ->
-        ([String], ModelSI -> SBool)
+        ([String], MModelS -> Z3 ())
 checkTransitionInvariantSat net f strans =
         (transitions net, checkTransitionInvariant net f strans)
 
-firedTransitionsFromAssignment :: ModelI -> [String]
+firedTransitionsFromAssignment :: MModelI -> [String]
 firedTransitionsFromAssignment = mElemsWith (> 0)

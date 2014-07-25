@@ -3,7 +3,7 @@
 module Solver
     (checkSat,checkSatInt,checkSatBool,MModelS,MModelI,MModelB,
      MModel(..),mVal,mValues,mElemsWith,mElemSum,CModel(..),
-     Z3Type(..),mkOr',mkAnd')
+     Z3Type(..),mkOr',mkAnd',mkAdd',mkSub',mkMul')
 where
 
 import Z3.Monad
@@ -20,7 +20,7 @@ type MModelI = MModel Integer
 type MModelB = MModel (Maybe Bool)
 
 class Z3Type a where
-        mkVal :: a -> Z3 AST -- TODO: needed?
+        mkVal :: a -> Z3 AST
         getVal :: AST -> Z3 a
 
 instance Z3Type Integer where
@@ -53,6 +53,18 @@ mkOr' xs = mkOr xs
 mkAnd' :: [AST] -> Z3 AST
 mkAnd' [] = mkTrue
 mkAnd' xs = mkAnd xs
+
+mkAdd' :: [AST] -> Z3 AST
+mkAdd' [] = mkInt (0::Integer)
+mkAdd' xs = mkAdd xs
+
+mkSub' :: [AST] -> Z3 AST
+mkSub' [] = mkInt (0::Integer)
+mkSub' xs = mkSub xs
+
+mkMul' :: [AST] -> Z3 AST
+mkMul' [] = mkInt (1::Integer)
+mkMul' xs = mkMul xs
 
 --class SMModel a where
 --        mElem :: MModel a -> String -> Z3 AST
