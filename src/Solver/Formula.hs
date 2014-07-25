@@ -9,7 +9,7 @@ import Solver
 
 evaluateTerm :: Term -> MModelS -> Z3 AST
 evaluateTerm (Var x) m = return $ mVal m x
-evaluateTerm (Const c) _ = mkInt c
+evaluateTerm (Const c) _ = mkVal c
 evaluateTerm (Minus t) m = mkUnaryMinus =<< evaluateTerm t m
 evaluateTerm (t :+: u) m = evalBinaryTerm m mkAdd t u
 evaluateTerm (t :-: u) m = evalBinaryTerm m mkSub t u

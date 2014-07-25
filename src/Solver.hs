@@ -1,13 +1,14 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
 
 module Solver
-    (checkSat,checkSatInt,MModelS,MModelI,MModelB,
-     MModel(..),mVal,mValues,mElemsWith,mElemSum,CModel(..))
+    (checkSat,checkSatInt,checkSatBool,MModelS,MModelI,MModelB,
+     MModel(..),mVal,mValues,mElemsWith,mElemSum,CModel(..),
+     Z3Type(..),mkOr',mkAnd')
 where
 
 import Z3.Monad
-import qualified Data.Map as M
 import Control.Monad
+import qualified Data.Map as M
 
 newtype MModel a = MModel { getMap :: M.Map String a }
 
@@ -16,15 +17,22 @@ instance Show a => Show (MModel a) where
 
 type MModelS = MModel AST
 type MModelI = MModel Integer
-type MModelB = MModel Bool
+type MModelB = MModel (Maybe Bool)
 
 class Z3Type a where
-        mkConcrete :: a -> Z3 AST
-        getConcrete :: AST -> Z3 a
+        mkVal :: a -> Z3 AST -- TODO: needed?
+        getVal :: AST -> Z3 a
 
 instance Z3Type Integer where
-        mkConcrete = mkInt
-        getConcrete = getInt
+        mkVal = mkInt
+        getVal = getInt
+
+instance Z3Type (Maybe Bool) where
+        mkVal x = case x of
+                      Nothing -> error "can not make undefined constant"
+                      Just True -> mkTrue
+                      Just False -> mkFalse
+        getVal  = getBool
 
 mVal :: MModel a -> String -> a
 mVal m x = M.findWithDefault (error ("key not found: " ++ x)) x (getMap m)
@@ -37,6 +45,14 @@ mElemsWith f m = M.keys $ M.filter f $ getMap m
 
 mElemSum :: (Num a) => MModel a -> [String] -> a
 mElemSum m xs = sum $ map (mVal m) xs
+
+mkOr' :: [AST] -> Z3 AST
+mkOr' [] = mkFalse
+mkOr' xs = mkOr xs
+
+mkAnd' :: [AST] -> Z3 AST
+mkAnd' [] = mkTrue
+mkAnd' xs = mkAnd xs
 
 --class SMModel a where
 --        mElem :: MModel a -> String -> Z3 AST
@@ -74,7 +90,7 @@ checkSat mkSort (vars, constraint) = do
                 ms <- evalT m syms
                 case ms of
                     Just xs -> do
-                        vals <- mapM getConcrete xs
+                        vals <- mapM getVal xs
                         let cmodel = MModel $ M.fromList $ vars `zip` vals
                         return $ Just cmodel
                     Nothing -> error "Prover returned incomplete model"
@@ -83,4 +99,7 @@ checkSat mkSort (vars, constraint) = do
             (Sat, Nothing) -> error "Prover returned sat but no model"
 
 checkSatInt :: ([String], MModel AST -> Z3 ()) -> IO (Maybe (MModel Integer))
-checkSatInt problem = evalZ3 $ checkSat mkIntSort problem
+checkSatInt = evalZ3 . checkSat mkIntSort
+
+checkSatBool :: ([String], MModel AST -> Z3 ()) -> IO (Maybe (MModel (Maybe Bool)))
+checkSatBool = evalZ3 . checkSat mkBoolSort

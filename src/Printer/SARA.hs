@@ -50,7 +50,7 @@ renderProperty filename net (Property propname Safety f) =
         "FILE " <> stringUtf8 (reverse (takeWhile (/='/') (reverse filename)))
             <> " TYPE LOLA;\n" <>
         "INITIAL " <> intercalate ","
-            (map (\(p,i) -> stringUtf8 p <> ":" <> integerDec i) (initials net))
+            (map (\(p,i) -> stringUtf8 p <> ":" <> integerDec i) (linitials net))
             <> ";\n" <>
         "FINAL COVER;\n" <>
         "CONSTRAINTS " <> renderFormula f <> ";"

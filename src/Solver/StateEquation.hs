@@ -16,20 +16,20 @@ placeConstraints net m = mapM_ (assertCnstr <=< checkPlaceEquation) $ places net
         where checkPlaceEquation p = do
                 incoming <- mapM (addTransition   1 ) $ lpre net p
                 outgoing <- mapM (addTransition (-1)) $ lpost net p
-                pinit <- mkInt $ initial net p
+                pinit <- mkVal $ initial net p
                 sums <- mkAdd (pinit:(incoming ++ outgoing))
                 mkEq sums (mVal m p)
               addTransition fac (t,w) =
-                  mkInt (fac*w) >>= \w' -> mkMul [w', mVal m t]
+                  mkVal (fac*w) >>= \w' -> mkMul [w', mVal m t]
 
 nonnegativityConstraints :: MModelS -> Z3 ()
 nonnegativityConstraints m = mapM_ (assertCnstr <=< geZero) $ mValues m
-        where geZero v = mkGe v =<< mkInt (0::Integer)
+        where geZero v = mkGe v =<< mkVal (0::Integer)
 
 checkTraps :: [[String]] -> MModelS -> Z3 ()
 checkTraps traps m = mapM_ (assertCnstr <=< checkTrap) traps
         where checkTrap trap = mkAdd (map (mVal m) trap) >>=
-                  (\v -> mkGe v =<< mkInt (1::Integer))
+                  (\v -> mkGe v =<< mkVal (1::Integer))
 
 checkStateEquation :: PetriNet -> Formula -> [[String]] -> MModelS -> Z3 ()
 checkStateEquation net f traps m = do

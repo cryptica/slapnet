@@ -4,35 +4,36 @@ module Solver.TrapConstraints
     )
 where
 
-import Data.SBV
+import Z3.Monad
+import Control.Monad
 
 import PetriNet
 import Solver
 
-trapConstraints :: PetriNet -> ModelSB -> SBool
-trapConstraints net m =
-            bAnd $ map trapConstraint $ transitions net
-        where trapConstraint t =
-                bOr (map (mElem m) $ pre net t) ==> bOr (map (mElem m) $ post net t)
+trapConstraints :: PetriNet -> MModelS -> Z3 ()
+trapConstraints net m = mapM_ (assertCnstr <=< trapConstraint) $ transitions net
+        where trapConstraint t = do
+                lhs <- mkOr' (map (mVal m) $ pre net t)
+                rhs <- mkOr' (map (mVal m) $ post net t)
+                mkImplies lhs rhs
 
-trapInitiallyMarked :: PetriNet -> ModelSB -> SBool
-trapInitiallyMarked net m =
-        let marked = map fst $ filter (( > 0) . snd) $ initials net
-        in  bOr $ map (mElem m) marked
+trapInitiallyMarked :: PetriNet -> MModelS -> Z3 ()
+trapInitiallyMarked net m = assertCnstr =<< mkOr' (map (mVal m) (initials net))
 
-trapUnassigned :: [String] -> ModelSB -> SBool
-trapUnassigned assigned m = bAnd $ map (mNotElem m) assigned
+trapUnassigned :: [String] -> MModelS -> Z3 ()
+trapUnassigned assigned m = mapM_ (assertCnstr <=< (mkNot . mVal m)) assigned
 
-checkTrap :: PetriNet -> [String] -> ModelSB -> SBool
-checkTrap net assigned m =
-        trapConstraints net m &&&
-        trapInitiallyMarked net m &&&
+checkTrap :: PetriNet -> [String] -> MModelS -> Z3 ()
+checkTrap net assigned m = do
+        trapConstraints net m
+        trapInitiallyMarked net m
         trapUnassigned assigned m
 
-checkTrapSat :: PetriNet -> [String] -> ([String], ModelSB -> SBool)
+checkTrapSat :: PetriNet -> [String] -> ([String], MModelS -> Z3 ())
 checkTrapSat net assigned =
         (places net, checkTrap net assigned)
 
-trapFromAssignment :: ModelB -> [String]
-trapFromAssignment = mElemsWith id
+trapFromAssignment :: MModelB -> [String]
+trapFromAssignment = mElemsWith (\x -> case x of Just True -> True
+                                                 _ -> False )
 

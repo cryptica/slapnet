@@ -24,6 +24,9 @@ import qualified Printer.SARA as SARAPrinter
 import Property
 import Solver
 import Solver.StateEquation
+import Solver.TrapConstraints
+--import Solver.TransitionInvariant
+--import Solver.SComponent
 
 data InputFormat = PNET | LOLA | TPN | MIST deriving (Show,Read)
 
@@ -221,7 +224,7 @@ transformNet (net, props) TerminationByReachability =
             ps = ["'sigma", "'m1", "'m2"] ++
                  places net ++ map prime (places net)
             is = [("'m1", 1)] ++
-                 initials net ++ map (first prime) (initials net)
+                 linitials net ++ map (first prime) (linitials net)
             transformTransition t =
                 let (preT, postT) = context net t
                     pre'  = [("'m1",1)] ++ preT  ++ map (first prime) preT
@@ -245,7 +248,7 @@ transformNet (net, props) TerminationByReachability =
 transformNet (net, props) ValidateIdentifiers =
         let ps = map validateId $ places net
             ts = map validateId $ transitions net
-            is = map (first validateId) $ initials net
+            is = map (first validateId) $ linitials net
             as = map (\(a,b,x) -> (validateId a, validateId b, x)) $ arcs net
             gs = map validateId $ ghostTransitions net
             net' = makePetriNet (name net) ps ts as is gs
@@ -289,6 +292,7 @@ checkProperty verbosity net refine p = do
         verbosePut verbosity 3 $ show p
         r <- case ptype p of
             Safety -> checkSafetyProperty verbosity net refine (pformula p) []
+            Liveness -> checkLivenessProperty verbosity net refine (pformula p) []
         verbosePut verbosity 0 $ showPropertyName p ++
                                     if r then " is satisfied."
                                     else " may not be satisfied."
@@ -305,7 +309,51 @@ checkSafetyProperty verbosity net refine f traps = do
                 verbosePut verbosity 1 "Assignment found"
                 verbosePut verbosity 2 $ "Places marked: " ++ show assigned
                 verbosePut verbosity 3 $ "Assignment: " ++ show a
-                return False
+                if refine then do
+                    rt <- checkSatBool $ checkTrapSat net assigned
+                    case rt of
+                        Nothing -> do
+                            verbosePut verbosity 1 "No trap found."
+                            return False
+                        Just at -> do
+                            let trap = trapFromAssignment at
+                            verbosePut verbosity 1 "Trap found"
+                            verbosePut verbosity 2 $ "Places in trap: " ++
+                                                      show trap
+                            verbosePut verbosity 3 $ "Trap assignment: " ++
+                                                      show at
+                            checkSafetyProperty verbosity net refine f
+                                                (trap:traps)
+                else
+                    return False
+
+checkLivenessProperty :: Int -> PetriNet -> Bool ->
+        Formula -> [([String],[String])] -> IO Bool
+checkLivenessProperty verbosity net refine f strans = do
+        r <- return Nothing -- checkSatInt $ checkTransitionInvariantSat net f strans
+        case r of
+            Nothing -> return True
+            Just ax -> do
+                let fired = [] -- firedTransitionsFromAssignment ax
+                verbosePut verbosity 1 "Assignment found"
+--                verbosePut verbosity 2 $ "Transitions fired: " ++ show fired
+--                verbosePut verbosity 3 $ "Assignment: " ++ show ax
+                if refine then do
+                    rt <- return Nothing -- checkSat $ checkSComponentSat net fired ax
+                    case rt of
+                        Nothing -> do
+                            verbosePut verbosity 1 "No S-component found"
+                            return False
+                        Just as -> do
+                            let sOutIn = undefined -- getSComponentOutIn net ax as
+--                            verbosePut verbosity 1 "S-component found"
+--                            verbosePut verbosity 2 $ "Out/In: " ++ show sOutIn
+--                            verbosePut verbosity 3 $ "S-Component assignment: " ++
+--                                                      show as
+                            checkLivenessProperty verbosity net refine f
+                                                  (sOutIn:strans)
+                else
+                    return False
 
 main :: IO ()
 main = do
