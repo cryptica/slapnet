@@ -270,7 +270,7 @@ makeImplicitProperty net DeadlockFree =
         Property "deadlock-free" Safety $
             foldl (:&:) FTrue
                 (map (foldl (:|:) FFalse . map (placeOp Lt) . lpre net)
-                     (transitions net))
+                     (filter (`notElem` ghostTransitions net) (transitions net)))
 makeImplicitProperty net DeadlockFreeUnlessFinal =
         let nodeadlock = makeImplicitProperty net DeadlockFree
             (finals, nonfinals) = partition (null . lpost net) (places net)
@@ -281,7 +281,9 @@ makeImplicitProperty net DeadlockFreeUnlessFinal =
 makeImplicitProperty net (Bounded k) =
         Property (show k ++ "-bounded") Safety $
             foldl (:|:) FFalse
-                (map (\p -> placeOp Gt (p,k)) (places net))
+                (map (\p -> placeOp Gt (p,k))
+                    (filter (`notElem` concatMap (post net) (ghostTransitions net))
+                        (places net)))
 makeImplicitProperty net Safe =
         let bounded = makeImplicitProperty net (Bounded 1)
         in  Property "safe" Safety $ pformula bounded
