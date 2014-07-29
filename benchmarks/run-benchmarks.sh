@@ -11,10 +11,6 @@ executable='../slapnet'
 
 #2 minutes
 time_soft=$(expr 2 \* 60)
-time_hard=$(expr $time_soft + 60)
-# 2 GB
-mem_soft=$(expr 2 \* 1048576)
-mem_hard=$(expr $mem_soft + 1024)
 
 properties=( 'safety' 'safe' 'deadlock-free' 'terminating' )
 property_options=( ''
@@ -36,14 +32,11 @@ for benchmark in ${benchmarks[@]}; do
         for ext in ${extensions[@]}; do
             for file in $(find $benchmark_dir -name "*.$ext"); do
                 # TODO: use /usr/bin/time to measure resources
+                # TODO: use ulimit to limit time/memory
                 timing="$(date +%s%N)"
                 (
-                    ulimit -S -t $time_soft
-                    ulimit -H -t $time_hard
-                    ulimit -S -v $mem_soft
-                    ulimit -H -v $mem_hard
                     set -o pipefail
-                    $executable $prop_options --$ext $file 2>&1 | tee $file.$prop.out
+                    timeout $time_soft $executable $prop_options --$ext $file 2>&1 | tee $file.$prop.out
                 )
                 result=$?
                 timing=$(($(date +%s%N)-timing))
@@ -51,12 +44,10 @@ for benchmark in ${benchmarks[@]}; do
                     list='positive'
                 elif [[ result -eq 2 ]]; then
                     list='dontknow'
-                elif [[ result -gt 127 ]]; then
+                elif [[ result -eq 124 || result -eq 137 ]]; then
                     list='timeout'
-                    timing=$result
                 else
                     list='error'
-                    timing=$result
                 fi
                 echo $timing $file >>$benchmark_dir/$prop-$list-slapnet.list
             done
