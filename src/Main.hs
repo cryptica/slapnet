@@ -48,6 +48,7 @@ data Options = Options { inputFormat :: InputFormat
                        , optRefine :: Bool
                        , optOutput :: Maybe String
                        , optUseProperties :: Bool
+                       , optPrintStructure :: Bool
                        }
 
 startOptions :: Options
@@ -60,6 +61,7 @@ startOptions = Options { inputFormat = PNET
                        , optRefine = True
                        , optOutput = Nothing
                        , optUseProperties = True
+                       , optPrintStructure = False
                        }
 
 options :: [ OptDescr (Options -> Either String Options) ]
@@ -79,6 +81,10 @@ options =
         , Option "" ["spec"]
         (NoArg (\opt -> Right opt { inputFormat = MIST }))
         "Use the mist input format"
+
+        , Option "s" ["structure"]
+        (NoArg (\opt -> Right opt { optPrintStructure = True }))
+        "Print structural information"
 
         , Option "" ["validate-identifiers"]
         (NoArg (\opt -> Right opt {
@@ -192,11 +198,30 @@ writeFiles verbosity basename net props = do
         L.writeFile (basename ++ ".sara") $
             SARAPrinter.printProperties basename net props
 
+structuralAnalysis :: PetriNet -> IO ()
+structuralAnalysis net =  do
+        let noGhost t = t `notElem` ghostTransitions net
+        let initP  = filter (\x -> (not . any noGhost . pre net) x &&
+                             (any noGhost . post net) x) (places net)
+        let finalP = filter (\x -> (not . any noGhost . post net) x &&
+                             (any noGhost . pre net) x) (places net)
+        let isolP  = filter (\x -> (not . any noGhost . post net) x &&
+                             (not . any noGhost . pre net) x) (places net)
+        let initT  = filter (\t -> noGhost t && null (pre  net t))
+                        (transitions net)
+        let finalT = filter (\t -> noGhost t && null (post net t))
+                        (transitions net)
+        putStrLn $ "Initial places     : " ++ show (length initP)
+        putStrLn $ "Initial transitions: " ++ show (length initT)
+        putStrLn $ "Isolated places    : " ++ show (length isolP)
+        putStrLn $ "Final places       : " ++ show (length finalP)
+        putStrLn $ "Final transitions  : " ++ show (length finalT)
+
 checkFile :: Parser (PetriNet,[Property]) -> Int -> Bool ->
             [ImplicitProperty] -> [NetTransformation] ->
-            Bool -> Maybe String -> String -> IO Bool
+            Bool -> Maybe String -> Bool -> String -> IO Bool
 checkFile parser verbosity refine implicitProperties transformations
-          useProperties output file = do
+          useProperties output printStruct file = do
         verbosePut verbosity 0 $ "Reading \"" ++ file ++ "\""
         (net,props) <- parseFile parser file
         let props' = if useProperties then props else []
@@ -206,6 +231,7 @@ checkFile parser verbosity refine implicitProperties transformations
         verbosePut verbosity 2 $
                 "Places: " ++ show (length  $ places net') ++ "; " ++
                 "Transitions: " ++ show (length $ transitions net')
+        when printStruct $ structuralAnalysis net
         verbosePut verbosity 3 $ show net'
         case output of
             Just outputfile -> writeFiles verbosity outputfile net' props'''
@@ -378,8 +404,8 @@ main = do
                 let properties = reverse $ optProperties opts
                 let transformations = reverse $ optTransformations opts
                 rs <- mapM (checkFile parser verbosity refinement properties
-                     transformations (optUseProperties opts) (optOutput opts))
-                     files
+                     transformations (optUseProperties opts) (optOutput opts)
+                     (optPrintStructure opts)) files
                 if and rs then
                     exitSuccessWith "All properties satisfied."
                 else
