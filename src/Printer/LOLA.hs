@@ -52,6 +52,7 @@ renderLinIneq :: LinearInequation -> Builder
 renderLinIneq (LinIneq lhs op rhs) =
         renderTerm lhs <> renderOp op <> renderTerm rhs
 
+-- TODO: reduce parantheses in built formula
 renderFormula :: Formula -> Builder
 renderFormula FTrue = "TRUE"
 renderFormula FFalse = "FALSE"

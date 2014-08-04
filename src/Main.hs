@@ -21,6 +21,7 @@ import PetriNet
 import Printer
 import qualified Printer.LOLA as LOLAPrinter
 import qualified Printer.SARA as SARAPrinter
+import qualified Printer.SPEC as SPECPrinter
 import Property
 import Solver
 import Solver.StateEquation
@@ -197,6 +198,12 @@ writeFiles verbosity basename net props = do
         verbosePut verbosity 1 $ "Writing properties to " ++ basename ++ ".sara"
         L.writeFile (basename ++ ".sara") $
             SARAPrinter.printProperties basename net props
+        mapM_ (\(p,i) -> do
+                let file = basename ++ ".target" ++ show i
+                verbosePut verbosity 1 $ "Writing " ++ showPropertyName p ++
+                                         " to " ++ file
+                L.writeFile file $ SPECPrinter.printProperty p
+              ) (zip props [(1::Integer)..])
 
 structuralAnalysis :: PetriNet -> IO ()
 structuralAnalysis net =  do
@@ -236,6 +243,7 @@ checkFile parser verbosity refine implicitProperties transformations
         case output of
             Just outputfile -> writeFiles verbosity outputfile net' props'''
             Nothing -> return ()
+        -- TODO: short-circuit?
         rs <- mapM (checkProperty verbosity net' refine) props'''
         verbosePut verbosity 0 ""
         return $ and rs
@@ -307,7 +315,7 @@ makeImplicitProperty net DeadlockFreeUnlessFinal =
 makeImplicitProperty net (Bounded k) =
         Property (show k ++ "-bounded") Safety $
             foldl (:|:) FFalse
-                (map (\p -> placeOp Gt (p,k))
+                (map (\p -> placeOp Ge (p,k+1))
                     (filter (`notElem` concatMap (post net) (ghostTransitions net))
                         (places net)))
 makeImplicitProperty net Safe =
@@ -406,11 +414,13 @@ main = do
                 rs <- mapM (checkFile parser verbosity refinement properties
                      transformations (optUseProperties opts) (optOutput opts)
                      (optPrintStructure opts)) files
+                -- TODO: short-circuit with Control.Monad.Loops?
                 if and rs then
                     exitSuccessWith "All properties satisfied."
                 else
                     exitFailureWith "Some properties may not be satisfied."
 
+-- TODO: Always exit with exit code 0 unless an error occured
 exitSuccessWith :: String -> IO ()
 exitSuccessWith msg = do
         putStrLn msg
