@@ -1,9 +1,11 @@
 #!/bin/bash
 
 #benchmarks=( 'service-tech/ibm-soundness' 'service-tech/sap-reference' )
-benchmarks=( 'cav-benchmarks/mist' 'cav-benchmarks/wahl-kroening' 'cav-benchmarks/soter' )
+#benchmarks=( 'cav-benchmarks/mist' 'cav-benchmarks/wahl-kroening' 'cav-benchmarks/soter' )
+benchmarks=( 'service-tech/sap-reference' )
 extensions=( 'pnet' 'tpn' 'lola' 'spec' )
 executable='/home/philipp/local/sara-1.0/src/sara'
+prop=( 'safe' )
 
 for benchmark in ${benchmarks[@]}; do
   benchmark_dir="$benchmark"
@@ -20,7 +22,7 @@ for benchmark in ${benchmarks[@]}; do
       echo "testing $file with $base"
       (
         set -o pipefail;
-        timeout 60 $executable -i $base.terminating.sara 2>&1 | tee $base.out
+        timeout 60 $executable -i $base.$prop.sara 2>&1 | tee $base.out
       )
       popd
       result=$?

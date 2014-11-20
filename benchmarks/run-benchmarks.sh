@@ -1,7 +1,8 @@
 #!/bin/bash
 
-#benchmarks=( 'service-tech/ibm-soundness' 'service-tech/sap-reference' )
-benchmarks=( 'cav-benchmarks/mist' 'cav-benchmarks/wahl-kroening' 'cav-benchmarks/soter' 'cav-benchmarks/bug_tracking' 'cav-benchmarks/medical' )
+benchmarks=( 'service-tech/ibm-soundness' 'service-tech/sap-reference' )
+#benchmarks=( 'service-tech/sap-reference' )
+#benchmarks=( 'cav-benchmarks/mist' 'cav-benchmarks/wahl-kroening' 'cav-benchmarks/soter' 'cav-benchmarks/bug_tracking' 'cav-benchmarks/medical' )
 
 extensions=( 'pnet' 'lola' 'tpn' 'spec' )
 executable='../slapnet'
@@ -9,14 +10,13 @@ executable='../slapnet'
 #3 hours
 time_soft=$(expr 3 \* 3600)
 
-properties=( 'deadlock_free' )
-prop_options=( '--no-given-properties --safe' )
+properties=( 'terminating' )
+prop_options=( '--no-given-properties --terminating' )
 
 for benchmark in ${benchmarks[@]}; do
     benchmark_dir="$benchmark"
     for (( propi=0;propi<${#properties[@]};propi++)); do
         prop=${properties[$propi]}
-        prop_options=${property_options[$propi]}
         >$benchmark_dir/$prop-positive-slapnet.list
         >$benchmark_dir/$prop-dontknow-slapnet.list
         >$benchmark_dir/$prop-timeout-slapnet.list
@@ -28,7 +28,9 @@ for benchmark in ${benchmarks[@]}; do
                 timing="$(date +%s%N)"
                 (
                     set -o pipefail
-                    timeout $time_soft $executable $prop_options --$ext $file -o $file.$prop 2>&1 | tee $file.$prop.out
+
+                    echo timeout $time_soft $executable $prop_options --$ext $file -o $file.$prop
+                    timeout $time_soft $executable $prop_options --$ext $file 2>&1 | tee $file.$prop.out
                 )
                 result=$?
                 timing=$(($(date +%s%N)-timing))

@@ -2,7 +2,8 @@
 
 #benchmarks=( 'service-tech/ibm-soundness' 'service-tech/sap-reference' )
 #benchmarks=( 'cav-benchmarks/mist' 'cav-benchmarks/wahl-kroening' 'cav-benchmarks/soter' 'cav-benchmarks/medical' 'cav-benchmarks/bug_tracking' )
-benchmarks=( 'cav-benchmarks/soter' )
+benchmarks=( 'service-tech/ibm-soundness' )
+#benchmarks=( 'service-tech/sap-reference' )
 extensions=( 'pnet' 'tpn' 'lola' 'spec' )
 
 tool='lola'
@@ -25,8 +26,7 @@ for benchmark in ${benchmarks[@]}; do
         >$benchmark_dir/$prop-timeout-$tool.list
         >$benchmark_dir/$prop-error-$tool.list
         for ext in ${extensions[@]}; do
-            #for file in `find $benchmark_dir -name "*.$ext"`; do
-            for file in $(cat $benchmark_dir/$prop.dontknow); do
+            for file in `find $benchmark_dir -name "*.$ext"`; do
                 timing="$(date +%s%N)"
                 (
                     ulimit -S -t $time_soft
@@ -34,7 +34,8 @@ for benchmark in ${benchmarks[@]}; do
                     ulimit -S -v $mem_soft
                     ulimit -H -v $mem_hard
                     set -o pipefail;
-                    $executable -f $file.spec.$prop.task1 $file.spec.$prop 2>&1 | tee $file.out
+                    echo $executable -f $file.$prop.task1 $file.$prop
+                    $executable -f $file.$prop.task1 $file.$prop 2>&1 | tee $file.out
                 )
                 result=$?
                 ryes=$(grep "result: yes" $file.out)

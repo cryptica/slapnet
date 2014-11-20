@@ -4,7 +4,8 @@ library("data.table")
 library("Hmisc")
 
 #folders <- c("LeaderElectionCR79", "LeaderElectionDKR82")
-folders <- c("LeaderElectionDKR82")
+#folders <- c("LeaderElectionCR79")
+folders <- c("Snapshot")
 
 for (folder in folders) {
     infile <- paste(folder, "benchmark.out", sep="/")
@@ -16,7 +17,8 @@ for (folder in folders) {
 
     datatable <- data.table(dataframe)
 
-    data <- datatable[,list(time=mean(user+system),err_time=sd(user+system),memory=mean(memory),err_memory=sd(memory)),by=n]
+    data <- datatable[,list(time=mean(user+system),memory=mean(memory/1024)),by=n]
+    #data <- datatable[,list(time=mean(user+system),err_time=sd(user+system),memory=mean(memory/1024),err_memory=sd(memory)),by=n]
 
     write.table(data, file=outfile, row.names=FALSE)
 
