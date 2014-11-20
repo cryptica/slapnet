@@ -187,6 +187,7 @@ parseArgs = do
 
 writeFiles :: Int -> String -> PetriNet -> [Property] -> IO ()
 writeFiles verbosity basename net props = do
+        -- TODO: add options for different outputs
         verbosePut verbosity 1 $ "Writing " ++ showNetName net ++ " to " ++ basename
         L.writeFile basename $ LOLAPrinter.printNet net
         mapM_ (\(p,i) -> do
@@ -198,12 +199,12 @@ writeFiles verbosity basename net props = do
         verbosePut verbosity 1 $ "Writing properties to " ++ basename ++ ".sara"
         L.writeFile (basename ++ ".sara") $
             SARAPrinter.printProperties basename net props
-        mapM_ (\(p,i) -> do
-                let file = basename ++ ".target" ++ show i
-                verbosePut verbosity 1 $ "Writing " ++ showPropertyName p ++
-                                         " to " ++ file
-                L.writeFile file $ SPECPrinter.printProperty p
-              ) (zip props [(1::Integer)..])
+        --mapM_ (\(p,i) -> do
+        --        let file = basename ++ ".target" ++ show i
+        --        verbosePut verbosity 1 $ "Writing " ++ showPropertyName p ++
+        --                                 " to " ++ file
+        --        L.writeFile file $ SPECPrinter.printProperty p
+        --      ) (zip props [(1::Integer)..])
 
 structuralAnalysis :: PetriNet -> IO ()
 structuralAnalysis net =  do
@@ -218,6 +219,8 @@ structuralAnalysis net =  do
                         (transitions net)
         let finalT = filter (\t -> noGhost t && null (post net t))
                         (transitions net)
+        putStrLn $ "Places             : " ++ show (length (places net))
+        putStrLn $ "Transitions        : " ++ show (length (transitions net))
         putStrLn $ "Initial places     : " ++ show (length initP)
         putStrLn $ "Initial transitions: " ++ show (length initT)
         putStrLn $ "Isolated places    : " ++ show (length isolP)

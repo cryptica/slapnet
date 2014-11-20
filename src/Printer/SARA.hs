@@ -37,14 +37,23 @@ renderLinIneq (LinIneq lhs op (Const c)) =
         renderTerm lhs <> renderOp op <> integerDec c
 renderLinIneq l = error $ "linear inequation not supported for sara: " <> show l
 
-renderFormula :: Formula -> Builder
-renderFormula (Atom a) = renderLinIneq a
-renderFormula (Neg _) = error "negation not supported for sara"
-renderFormula (p :&: q) = renderFormula p <> "," <> renderFormula q
-renderFormula f = error $ "formula not supported for sara: " <> show f
+renderConjunction :: Formula -> Builder
+renderConjunction (Atom a) = renderLinIneq a
+renderConjunction (Neg _) = error "negation not supported for sara"
+renderConjunction (FTrue :&: p) = renderConjunction p
+renderConjunction (p :&: FTrue) = renderConjunction p
+renderConjunction (p :&: q) = renderConjunction p <> ", " <> renderConjunction q
+renderConjunction f = error $ "formula not supported for sara: " <> show f
 
-renderProperty :: String -> PetriNet -> Property -> Builder
-renderProperty filename net (Property propname Safety f) =
+renderDisjunction :: String -> String -> PetriNet -> Formula -> Builder
+renderDisjunction propname filename net (FFalse :|: p) =
+        renderDisjunction propname filename net p
+renderDisjunction propname filename net (p :|: FFalse) =
+        renderDisjunction propname filename net p
+renderDisjunction propname filename net (p :|: q) =
+        renderDisjunction propname filename net p <> "\n\n" <>
+        renderDisjunction propname filename net q
+renderDisjunction propname filename net f =
         "PROBLEM " <> stringUtf8 (validateId propname) <> ":\n" <>
         "GOAL REACHABILITY;\n" <>
         "FILE " <> stringUtf8 (reverse (takeWhile (/='/') (reverse filename)))
@@ -53,7 +62,14 @@ renderProperty filename net (Property propname Safety f) =
             (map (\(p,i) -> stringUtf8 p <> ":" <> integerDec i) (initials net))
             <> ";\n" <>
         "FINAL COVER;\n" <>
-        "CONSTRAINTS " <> renderFormula f <> ";"
+        "CONSTRAINTS " <> renderConjunction f <> ";"
+
+renderFormula :: String -> String -> PetriNet -> Formula -> Builder
+renderFormula = renderDisjunction
+
+renderProperty :: String -> PetriNet -> Property -> Builder
+renderProperty filename net (Property propname Safety f) =
+        renderFormula propname filename net f
 renderProperty _ _ (Property _ Liveness _) =
         error "liveness property not supported for sara"
 
