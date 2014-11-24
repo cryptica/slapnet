@@ -12,6 +12,7 @@ import qualified Text.Parsec.Token as Token
 import Parser
 import PetriNet (PetriNet,makePetriNet)
 import Property
+import Structure
 
 languageDef :: LanguageDef ()
 languageDef =
@@ -179,16 +180,24 @@ formula = buildExpressionParser formOperatorTable formAtom <?> "formula"
 
 propertyType :: Parser PropertyType
 propertyType =
-        (reserved "safety" *> return Safety) <|>
-        (reserved "liveness" *> return Liveness)
+        (reserved "safety" *> return SafetyType) <|>
+        (reserved "liveness" *> return LivenessType) <|>
+        (reserved "structural" *> return StructuralType)
+
 
 property :: Parser Property
 property = do
         pt <- propertyType
         reserved "property"
         name <- option "" ident
-        form <- braces formula
-        return Property { pname=name, ptype=pt, pformula=form }
+        case pt of
+            SafetyType -> do
+                form <- braces formula
+                return Property { pname=name, pcont=Safety form }
+            LivenessType -> do
+                form <- braces formula
+                return Property { pname=name, pcont=Liveness form }
+            StructuralType -> error "structural property not supported for pnet"
 
 parseContent :: Parser (PetriNet,[Property])
 parseContent = do

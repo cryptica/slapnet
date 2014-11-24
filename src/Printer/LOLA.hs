@@ -62,9 +62,11 @@ renderFormula (p :&: q) = renderFormula p <> " AND " <> renderFormula q
 renderFormula (p :|: q) = "(" <> renderFormula p <> " OR " <> renderFormula q <> ")"
 
 renderProperty :: Property -> Builder
-renderProperty (Property _ Safety f) = "EF (" <> renderFormula f <> ")\n"
-renderProperty (Property _ Liveness _) =
+renderProperty (Property _ (Safety f)) = "EF (" <> renderFormula f <> ")\n"
+renderProperty (Property _ (Liveness _)) =
         error "liveness property not supported for lola"
+renderProperty (Property _ (Structural _)) =
+        error "structural property not supported for lola"
 
 printProperty :: Property -> L.ByteString
 printProperty = toLazyByteString . renderProperty

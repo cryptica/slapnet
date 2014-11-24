@@ -5,11 +5,19 @@ module Property
      showPropertyName,
      rename,
      PropertyType(..),
+     PropertyContent(..),
      Formula(..),
      LinearInequation(..),
      Op(..),
-     Term(..))
+     Term(..),
+     PropResult(..),
+     resultAnd,
+     resultOr,
+     resultsAnd,
+     resultsOr)
 where
+
+import Structure
 
 data Term = Var String
           | Const Integer
@@ -79,25 +87,59 @@ renameFormula f (Neg p) = Neg (renameFormula f p)
 renameFormula f (p :&: q) = renameFormula f p :&: renameFormula f q
 renameFormula f (p :|: q) = renameFormula f p :|: renameFormula f q
 
-data PropertyType = Safety | Liveness
+data PropertyType = SafetyType
+                  | LivenessType
+                  | StructuralType
 
-instance Show PropertyType where
-        show Safety = "safety"
-        show Liveness = "liveness"
+data PropertyContent = Safety Formula
+                  | Liveness Formula
+                  | Structural Structure
+
+showPropertyType :: PropertyContent -> String
+showPropertyType (Safety _) = "safety"
+showPropertyType (Liveness _) = "liveness"
+showPropertyType (Structural _) = "structural"
+
+showPropertyContent :: PropertyContent -> String
+showPropertyContent (Safety f) = show f
+showPropertyContent (Liveness f) = show f
+showPropertyContent (Structural s) = show s
 
 data Property = Property {
         pname :: String,
-        ptype :: PropertyType,
-        pformula :: Formula
+        pcont :: PropertyContent
 }
 
 instance Show Property where
         show p =
-            showPropertyName p ++ " { " ++ show (pformula p) ++ " }"
+            showPropertyName p ++
+            " { " ++ showPropertyContent (pcont p) ++ " }"
 
 rename :: (String -> String) -> Property -> Property
-rename f (Property pn pt pf) = Property pn pt (renameFormula f pf)
+rename f (Property pn (Safety pf)) = Property pn (Safety (renameFormula f pf))
+rename f (Property pn (Liveness pf)) = Property pn (Liveness (renameFormula f pf))
+rename _ (Property pn (Structural pc)) = Property pn (Structural pc)
 
 showPropertyName :: Property -> String
-showPropertyName p = show (ptype p) ++ " property" ++
+showPropertyName p = showPropertyType (pcont p) ++ " property" ++
                (if null (pname p) then "" else " " ++ show (pname p))
+
+data PropResult = Satisfied | Unsatisfied | Unknown
+
+resultAnd :: PropResult -> PropResult -> PropResult
+resultAnd Satisfied x = x
+resultAnd Unsatisfied _ = Unsatisfied
+resultAnd _ Unsatisfied = Unsatisfied
+resultAnd Unknown _ = Unknown
+
+resultOr :: PropResult -> PropResult -> PropResult
+resultOr Satisfied _ = Satisfied
+resultOr _ Satisfied = Satisfied
+resultOr Unsatisfied x = x
+resultOr Unknown _ = Unknown
+
+resultsAnd :: [PropResult] -> PropResult
+resultsAnd = foldr resultAnd Satisfied
+
+resultsOr :: [PropResult] -> PropResult
+resultsOr = foldr resultOr Unsatisfied

@@ -65,7 +65,7 @@ prop = do
         reserved "target"
         ineqs <- many1 (commaSep1 ineq)
         _ <- optionMaybe (reserved "invariants" *> invariants)
-        return $ Property "" Safety $
+        return $ Property "" $ Safety $
                     foldl1 (:|:) $ map (foldl1 (:&:)) ineqs
 
 ineq :: Parser Formula

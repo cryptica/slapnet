@@ -37,9 +37,11 @@ renderFormula :: Formula -> Builder
 renderFormula = renderDisjunction
 
 renderProperty :: Property -> Builder
-renderProperty (Property _ Safety f) = renderFormula f
-renderProperty (Property _ Liveness _) =
+renderProperty (Property _ (Safety f)) = renderFormula f
+renderProperty (Property _ (Liveness _)) =
         error "liveness property not supported for spec"
+renderProperty (Property _ (Structural _)) =
+        error "structural property not supported for spec"
 
 printProperty :: Property -> L.ByteString
 printProperty prop =

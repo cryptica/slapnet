@@ -23,6 +23,7 @@ import qualified Printer.LOLA as LOLAPrinter
 import qualified Printer.SARA as SARAPrinter
 import qualified Printer.SPEC as SPECPrinter
 import Property
+import Structure
 import Solver
 import Solver.StateEquation
 import Solver.TrapConstraints
@@ -38,6 +39,7 @@ data ImplicitProperty = Termination
                       | DeadlockFree | DeadlockFreeUnlessFinal
                       | ProperTermination
                       | Safe | Bounded Integer
+                      | StructFreeChoice
                       deriving (Show,Read)
 
 data Options = Options { inputFormat :: InputFormat
@@ -139,6 +141,12 @@ options =
                 "K")
         "Prove that the net is K-bounded"
 
+        , Option "" ["free-choice"]
+        (NoArg (\opt -> Right opt {
+                   optProperties = StructFreeChoice : optProperties opt
+               }))
+        "Prove that the net is free-choice"
+
         , Option "n" ["no-refinement"]
         (NoArg (\opt -> Right opt { optRefine = False }))
         "Don't use refinement"
@@ -229,7 +237,7 @@ structuralAnalysis net =  do
 
 checkFile :: Parser (PetriNet,[Property]) -> Int -> Bool ->
             [ImplicitProperty] -> [NetTransformation] ->
-            Bool -> Maybe String -> Bool -> String -> IO Bool
+            Bool -> Maybe String -> Bool -> String -> IO PropResult
 checkFile parser verbosity refine implicitProperties transformations
           useProperties output printStruct file = do
         verbosePut verbosity 0 $ "Reading \"" ++ file ++ "\""
@@ -249,7 +257,7 @@ checkFile parser verbosity refine implicitProperties transformations
         -- TODO: short-circuit?
         rs <- mapM (checkProperty verbosity net' refine) props'''
         verbosePut verbosity 0 ""
-        return $ and rs
+        return $ resultsAnd rs
 
 placeOp :: Op -> (String, Integer) -> Formula
 placeOp op (p,w) = Atom $ LinIneq (Var p) op (Const w)
@@ -275,7 +283,7 @@ transformNet (net, props) TerminationByReachability =
             ts = ("'switch", [("'m1",1)], [("'m2",1)]) :
                  concatMap transformTransition (transitions net)
             gs = ghostTransitions net
-            prop = Property "termination by reachability" Safety $
+            prop = Property "termination by reachability" $ Safety $
                     foldl (:&:) (Atom (LinIneq (Var "'sigma") Ge (Const 1)))
                       (map (\p -> Atom (LinIneq
                                 (Var (prime p) :-: Var p) Ge (Const 0)))
@@ -294,55 +302,60 @@ transformNet (net, props) ValidateIdentifiers =
 
 makeImplicitProperty :: PetriNet -> ImplicitProperty -> Property
 makeImplicitProperty net Termination =
-        Property "termination" Liveness $
+        Property "termination" $ Liveness $
             foldl (:&:) FTrue
                 (map (\t -> Atom (LinIneq (Var t) Eq (Const 0)))
                     (ghostTransitions net))
 makeImplicitProperty net ProperTermination =
         let (finals, nonfinals) = partition (null . lpost net) (places net)
-        in  Property "proper termination" Safety
+        in  Property "proper termination" $ Safety
             (foldl (:|:) FFalse (map (\p -> placeOp Gt (p,0)) finals) :&:
              foldl (:|:) FFalse (map (\p -> placeOp Gt (p,0)) nonfinals))
 makeImplicitProperty net DeadlockFree =
-        Property "deadlock-free" Safety $
+        Property "deadlock-free" $ Safety $
             foldl (:&:) FTrue
                 (map (foldl (:|:) FFalse . map (placeOp Lt) . lpre net)
                      (filter (`notElem` ghostTransitions net) (transitions net)))
 makeImplicitProperty net DeadlockFreeUnlessFinal =
-        let nodeadlock = makeImplicitProperty net DeadlockFree
+        let (Property _ (Safety pf)) = makeImplicitProperty net DeadlockFree
             (finals, nonfinals) = partition (null . lpost net) (places net)
-        in  Property "deadlock-free unless final" Safety $
+        in  Property "deadlock-free unless final" $ Safety $
             (foldl (:&:) FTrue  (map (\p -> placeOp Eq (p,0)) finals) :|:
              foldl (:|:) FFalse (map (\p -> placeOp Gt (p,0)) nonfinals)) :&:
-            pformula nodeadlock
+            pf
 makeImplicitProperty net (Bounded k) =
-        Property (show k ++ "-bounded") Safety $
+        Property (show k ++ "-bounded") $ Safety $
             foldl (:|:) FFalse
                 (map (\p -> placeOp Ge (p,k+1))
                     (filter (`notElem` concatMap (post net) (ghostTransitions net))
                         (places net)))
 makeImplicitProperty net Safe =
         let bounded = makeImplicitProperty net (Bounded 1)
-        in  Property "safe" Safety $ pformula bounded
+        in  Property "safe" $ pcont bounded
+makeImplicitProperty _ StructFreeChoice =
+        Property "free choice" $ Structural FreeChoice
 
-checkProperty :: Int -> PetriNet -> Bool -> Property -> IO Bool
+checkProperty :: Int -> PetriNet -> Bool -> Property -> IO PropResult
 checkProperty verbosity net refine p = do
         verbosePut verbosity 1 $ "\nChecking " ++ showPropertyName p
         verbosePut verbosity 3 $ show p
-        r <- case ptype p of
-            Safety -> checkSafetyProperty verbosity net refine (pformula p) []
-            Liveness -> checkLivenessProperty verbosity net refine (pformula p) []
-        verbosePut verbosity 0 $ showPropertyName p ++
-                                    if r then " is satisfied."
-                                    else " may not be satisfied."
+        r <- case pcont p of
+            (Safety pf) -> checkSafetyProperty verbosity net refine pf []
+            (Liveness pf) -> checkLivenessProperty verbosity net refine pf []
+            (Structural ps) -> checkStructuralProperty verbosity net ps
+        verbosePut verbosity 0 $ showPropertyName p ++ " " ++
+            case r of
+                Satisfied -> "is satisfied."
+                Unsatisfied -> "is not satisfied."
+                Unknown-> "may not be satisfied."
         return r
 
 checkSafetyProperty :: Int -> PetriNet -> Bool ->
-        Formula -> [[String]] -> IO Bool
+        Formula -> [[String]] -> IO PropResult
 checkSafetyProperty verbosity net refine f traps = do
         r <- checkSat $ checkStateEquationSat net f traps
         case r of
-            Nothing -> return True
+            Nothing -> return Satisfied
             Just a -> do
                 let assigned = markedPlacesFromAssignment net a
                 verbosePut verbosity 1 "Assignment found"
@@ -353,7 +366,7 @@ checkSafetyProperty verbosity net refine f traps = do
                     case rt of
                         Nothing -> do
                             verbosePut verbosity 1 "No trap found."
-                            return False
+                            return Unknown
                         Just at -> do
                             let trap = trapFromAssignment at
                             verbosePut verbosity 1 "Trap found"
@@ -364,14 +377,14 @@ checkSafetyProperty verbosity net refine f traps = do
                             checkSafetyProperty verbosity net refine f
                                                 (trap:traps)
                 else
-                    return False
+                    return Unknown
 
 checkLivenessProperty :: Int -> PetriNet -> Bool ->
-        Formula -> [([String],[String])] -> IO Bool
+        Formula -> [([String],[String])] -> IO PropResult
 checkLivenessProperty verbosity net refine f strans = do
         r <- checkSat $ checkTransitionInvariantSat net f strans
         case r of
-            Nothing -> return True
+            Nothing -> return Satisfied
             Just ax -> do
                 let fired = firedTransitionsFromAssignment ax
                 verbosePut verbosity 1 "Assignment found"
@@ -382,7 +395,7 @@ checkLivenessProperty verbosity net refine f strans = do
                     case rt of
                         Nothing -> do
                             verbosePut verbosity 1 "No S-component found"
-                            return False
+                            return Unknown
                         Just as -> do
                             let sOutIn = getSComponentOutIn net ax as
                             verbosePut verbosity 1 "S-component found"
@@ -392,7 +405,14 @@ checkLivenessProperty verbosity net refine f strans = do
                             checkLivenessProperty verbosity net refine f
                                                   (sOutIn:strans)
                 else
-                    return False
+                    return Unknown
+
+checkStructuralProperty :: Int -> PetriNet -> Structure -> IO PropResult
+checkStructuralProperty _ net struct = do
+        if checkStructure net struct then
+            return Satisfied
+        else
+            return Unsatisfied
 
 main :: IO ()
 main = do
@@ -418,10 +438,13 @@ main = do
                      transformations (optUseProperties opts) (optOutput opts)
                      (optPrintStructure opts)) files
                 -- TODO: short-circuit with Control.Monad.Loops?
-                if and rs then
-                    exitSuccessWith "All properties satisfied."
-                else
-                    exitFailureWith "Some properties may not be satisfied."
+                case resultsAnd rs of
+                    Satisfied ->
+                        exitSuccessWith "All properties satisfied."
+                    Unsatisfied ->
+                        exitFailureWith "Some properties are not satisfied"
+                    Unknown ->
+                        exitFailureWith "Some properties may not be satisfied."
 
 -- TODO: Always exit with exit code 0 unless an error occured
 exitSuccessWith :: String -> IO ()

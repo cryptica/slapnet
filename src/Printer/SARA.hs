@@ -68,10 +68,12 @@ renderFormula :: String -> String -> PetriNet -> Formula -> Builder
 renderFormula = renderDisjunction
 
 renderProperty :: String -> PetriNet -> Property -> Builder
-renderProperty filename net (Property propname Safety f) =
+renderProperty filename net (Property propname (Safety f)) =
         renderFormula propname filename net f
-renderProperty _ _ (Property _ Liveness _) =
+renderProperty _ _ (Property _ (Liveness _)) =
         error "liveness property not supported for sara"
+renderProperty _ _ (Property _ (Structural _)) =
+        error "structural property not supported for sara"
 
 printProperties :: String -> PetriNet -> [Property] -> L.ByteString
 printProperties filename net props =
