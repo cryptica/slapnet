@@ -12,7 +12,6 @@ import qualified Text.Parsec.Token as Token
 import Parser
 import PetriNet (PetriNet,makePetriNet)
 import Property
-import Structure
 
 languageDef :: LanguageDef ()
 languageDef =

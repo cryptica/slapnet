@@ -22,6 +22,7 @@ import Printer
 import qualified Printer.LOLA as LOLAPrinter
 import qualified Printer.SARA as SARAPrinter
 import qualified Printer.SPEC as SPECPrinter
+import qualified Printer.DOT as DOTPrinter
 import Property
 import Structure
 import Solver
@@ -40,6 +41,8 @@ data ImplicitProperty = Termination
                       | ProperTermination
                       | Safe | Bounded Integer
                       | StructFreeChoice
+                      | StructParallel
+                      | StructFinalPlace
                       deriving (Show,Read)
 
 data Options = Options { inputFormat :: InputFormat
@@ -147,6 +150,18 @@ options =
                }))
         "Prove that the net is free-choice"
 
+        , Option "" ["parallel"]
+        (NoArg (\opt -> Right opt {
+                   optProperties = StructParallel : optProperties opt
+               }))
+        "Prove that the net has non-trivial parallellism"
+
+        , Option "" ["final-place"]
+        (NoArg (\opt -> Right opt {
+                   optProperties = StructFinalPlace : optProperties opt
+               }))
+        "Prove that there is only one needed final place"
+
         , Option "n" ["no-refinement"]
         (NoArg (\opt -> Right opt { optRefine = False }))
         "Don't use refinement"
@@ -197,16 +212,17 @@ writeFiles :: Int -> String -> PetriNet -> [Property] -> IO ()
 writeFiles verbosity basename net props = do
         -- TODO: add options for different outputs
         verbosePut verbosity 1 $ "Writing " ++ showNetName net ++ " to " ++ basename
-        L.writeFile basename $ LOLAPrinter.printNet net
-        mapM_ (\(p,i) -> do
-                let file = basename ++ ".task" ++ show i
-                verbosePut verbosity 1 $ "Writing " ++ showPropertyName p ++
-                                         " to " ++ file
-                L.writeFile file $ LOLAPrinter.printProperty p
-              ) (zip props [(1::Integer)..])
-        verbosePut verbosity 1 $ "Writing properties to " ++ basename ++ ".sara"
-        L.writeFile (basename ++ ".sara") $
-            SARAPrinter.printProperties basename net props
+        L.writeFile basename $ DOTPrinter.printNet net
+        --L.writeFile basename $ LOLAPrinter.printNet net
+        --mapM_ (\(p,i) -> do
+        --        let file = basename ++ ".task" ++ show i
+        --        verbosePut verbosity 1 $ "Writing " ++ showPropertyName p ++
+        --                                 " to " ++ file
+        --        L.writeFile file $ LOLAPrinter.printProperty p
+        --      ) (zip props [(1::Integer)..])
+        --verbosePut verbosity 1 $ "Writing properties to " ++ basename ++ ".sara"
+        --L.writeFile (basename ++ ".sara") $
+        --    SARAPrinter.printProperties basename net props
         --mapM_ (\(p,i) -> do
         --        let file = basename ++ ".target" ++ show i
         --        verbosePut verbosity 1 $ "Writing " ++ showPropertyName p ++
@@ -334,6 +350,10 @@ makeImplicitProperty net Safe =
         in  Property "safe" $ pcont bounded
 makeImplicitProperty _ StructFreeChoice =
         Property "free choice" $ Structural FreeChoice
+makeImplicitProperty _ StructParallel =
+        Property "parallel" $ Structural Parallel
+makeImplicitProperty _ StructFinalPlace =
+        Property "final place" $ Structural FinalPlace
 
 checkProperty :: Int -> PetriNet -> Bool -> Property -> IO PropResult
 checkProperty verbosity net refine p = do
@@ -408,7 +428,7 @@ checkLivenessProperty verbosity net refine f strans = do
                     return Unknown
 
 checkStructuralProperty :: Int -> PetriNet -> Structure -> IO PropResult
-checkStructuralProperty _ net struct = do
+checkStructuralProperty _ net struct =
         if checkStructure net struct then
             return Satisfied
         else
