@@ -32,6 +32,7 @@ import Solver.TransitionInvariant
 import Solver.SComponent
 
 data InputFormat = PNET | LOLA | TPN | MIST deriving (Show,Read)
+data OutputFormat = OutLOLA | OutSARA | OutSPEC | OutDOT deriving (Show,Read)
 
 data NetTransformation = TerminationByReachability
                        | ValidateIdentifiers
@@ -54,6 +55,7 @@ data Options = Options { inputFormat :: InputFormat
                        , optTransformations :: [NetTransformation]
                        , optRefine :: Bool
                        , optOutput :: Maybe String
+                       , outputFormat :: OutputFormat
                        , optUseProperties :: Bool
                        , optPrintStructure :: Bool
                        }
@@ -67,6 +69,7 @@ startOptions = Options { inputFormat = PNET
                        , optTransformations = []
                        , optRefine = True
                        , optOutput = Nothing
+                       , outputFormat = OutLOLA
                        , optUseProperties = True
                        , optPrintStructure = False
                        }
@@ -180,6 +183,22 @@ options =
                 "FILE")
         "Write net and properties to FILE"
 
+        , Option "" ["out-lola"]
+        (NoArg (\opt -> Right opt { outputFormat = OutLOLA }))
+        "Use the lola output format"
+
+        , Option "" ["out-sara"]
+        (NoArg (\opt -> Right opt { outputFormat = OutSARA }))
+        "Use the sara output format"
+
+        , Option "" ["out-spec"]
+        (NoArg (\opt -> Right opt { outputFormat = OutSPEC }))
+        "Use the spec output format"
+
+        , Option "" ["out-dot"]
+        (NoArg (\opt -> Right opt { outputFormat = OutDOT }))
+        "Use the dot output format"
+
         , Option "" ["no-given-properties"]
         (NoArg (\opt -> Right opt {
                    optUseProperties = False
@@ -215,27 +234,34 @@ parseArgs = do
                 return $ (,files) <$> foldl (>>=) (return startOptions) actions
             (_, _, errs) -> return $ Left $ concat errs
 
-writeFiles :: Int -> String -> PetriNet -> [Property] -> IO ()
-writeFiles verbosity basename net props = do
-        -- TODO: add options for different outputs
-        verbosePut verbosity 1 $ "Writing " ++ showNetName net ++ " to " ++ basename
-        L.writeFile basename $ DOTPrinter.printNet net
-        --L.writeFile basename $ LOLAPrinter.printNet net
-        --mapM_ (\(p,i) -> do
-        --        let file = basename ++ ".task" ++ show i
-        --        verbosePut verbosity 1 $ "Writing " ++ showPropertyName p ++
-        --                                 " to " ++ file
-        --        L.writeFile file $ LOLAPrinter.printProperty p
-        --      ) (zip props [(1::Integer)..])
-        --verbosePut verbosity 1 $ "Writing properties to " ++ basename ++ ".sara"
-        --L.writeFile (basename ++ ".sara") $
-        --    SARAPrinter.printProperties basename net props
-        --mapM_ (\(p,i) -> do
-        --        let file = basename ++ ".target" ++ show i
-        --        verbosePut verbosity 1 $ "Writing " ++ showPropertyName p ++
-        --                                 " to " ++ file
-        --        L.writeFile file $ SPECPrinter.printProperty p
-        --      ) (zip props [(1::Integer)..])
+writeFiles :: Int -> String -> OutputFormat -> PetriNet -> [Property] -> IO ()
+writeFiles verbosity basename format net props = do
+        verbosePut verbosity 1 $ "Writing " ++ showNetName net ++ " to " ++
+                                  basename ++ " in format " ++ show format
+        case format of
+            OutLOLA -> do
+                L.writeFile basename $ LOLAPrinter.printNet net
+                mapM_ (\(p,i) -> do
+                        let file = basename ++ ".task" ++ show i
+                        verbosePut verbosity 1 $ "Writing " ++ showPropertyName p
+                                                 ++ " to " ++ file
+                        L.writeFile file $ LOLAPrinter.printProperty p
+                      ) (zip props [(1::Integer)..])
+            OutSARA -> do
+                L.writeFile basename $ LOLAPrinter.printNet net
+                verbosePut verbosity 1 $ "Writing properties to " ++ basename ++
+                                         ".sara"
+                L.writeFile (basename ++ ".sara") $
+                    SARAPrinter.printProperties basename net props
+            OutSPEC ->
+                mapM_ (\(p,i) -> do
+                        let file = basename ++ ".target" ++ show i
+                        verbosePut verbosity 1 $ "Writing " ++ showPropertyName p
+                                                 ++ " to " ++ file
+                        L.writeFile file $ SPECPrinter.printProperty p
+                      ) (zip props [(1::Integer)..])
+            OutDOT ->
+                L.writeFile basename $ DOTPrinter.printNet net
 
 structuralAnalysis :: PetriNet -> IO ()
 structuralAnalysis net =  do
@@ -260,9 +286,10 @@ structuralAnalysis net =  do
 
 checkFile :: Parser (PetriNet,[Property]) -> Int -> Bool ->
             [ImplicitProperty] -> [NetTransformation] ->
-            Bool -> Maybe String -> Bool -> String -> IO PropResult
+            Bool -> Maybe String -> OutputFormat -> Bool -> String ->
+            IO PropResult
 checkFile parser verbosity refine implicitProperties transformations
-          useProperties output printStruct file = do
+          useProperties output format printStruct file = do
         verbosePut verbosity 0 $ "Reading \"" ++ file ++ "\""
         (net,props) <- parseFile parser file
         let props' = if useProperties then props else []
@@ -275,7 +302,8 @@ checkFile parser verbosity refine implicitProperties transformations
         when printStruct $ structuralAnalysis net
         verbosePut verbosity 3 $ show net'
         case output of
-            Just outputfile -> writeFiles verbosity outputfile net' props'''
+            Just outputfile ->
+                writeFiles verbosity outputfile format net' props'''
             Nothing -> return ()
         -- TODO: short-circuit?
         rs <- mapM (checkProperty verbosity net' refine) props'''
@@ -465,7 +493,7 @@ main = do
                 let transformations = reverse $ optTransformations opts
                 rs <- mapM (checkFile parser verbosity refinement properties
                      transformations (optUseProperties opts) (optOutput opts)
-                     (optPrintStructure opts)) files
+                     (outputFormat opts) (optPrintStructure opts)) files
                 -- TODO: short-circuit with Control.Monad.Loops?
                 case resultsAnd rs of
                     Satisfied ->
