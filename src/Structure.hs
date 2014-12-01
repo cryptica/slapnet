@@ -7,12 +7,14 @@ where
 import PetriNet
 import Data.List (intersect,sort)
 
-data Structure = FreeChoice | Parallel | FinalPlace
+-- TODO: use formulas instead of hard-coded properties
+data Structure = FreeChoice | Parallel | FinalPlace | CommunicationFree
 
 instance Show Structure where
         show FreeChoice = "free choice"
         show Parallel = "parallel"
         show FinalPlace = "final place"
+        show CommunicationFree = "communication free"
 
 checkStructure :: PetriNet -> Structure -> Bool
 checkStructure net FreeChoice =
@@ -22,11 +24,13 @@ checkStructure net FreeChoice =
                       spost = sort $ post net s
                   in null (ppost `intersect` spost) || ppost == spost
 checkStructure net Parallel =
-            any (checkParallelT net) (transitions net)
+        any (checkParallelT net) (transitions net)
 checkStructure net FinalPlace =
-                length (filter finalPlace (places net)) == 1
-            where finalPlace p = null (post net p) &&
-                      all (\t -> length (post net t) == 1) (pre net p)
+            length (filter finalPlace (places net)) == 1
+        where finalPlace p = null (post net p) &&
+                  all (\t -> length (post net t) == 1) (pre net p)
+checkStructure net CommunicationFree =
+        all (\t -> length (pre net t) == 1) (transitions net)
 
 checkParallelT :: PetriNet -> String -> Bool
 checkParallelT net t =

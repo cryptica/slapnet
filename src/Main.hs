@@ -43,6 +43,7 @@ data ImplicitProperty = Termination
                       | StructFreeChoice
                       | StructParallel
                       | StructFinalPlace
+                      | StructCommunicationFree
                       deriving (Show,Read)
 
 data Options = Options { inputFormat :: InputFormat
@@ -161,6 +162,12 @@ options =
                    optProperties = StructFinalPlace : optProperties opt
                }))
         "Prove that there is only one needed final place"
+
+        , Option "" ["communication-free"]
+        (NoArg (\opt -> Right opt {
+                   optProperties = StructCommunicationFree : optProperties opt
+               }))
+        "Prove that the net is communication-free"
 
         , Option "n" ["no-refinement"]
         (NoArg (\opt -> Right opt { optRefine = False }))
@@ -354,6 +361,8 @@ makeImplicitProperty _ StructParallel =
         Property "parallel" $ Structural Parallel
 makeImplicitProperty _ StructFinalPlace =
         Property "final place" $ Structural FinalPlace
+makeImplicitProperty _ StructCommunicationFree =
+        Property "communication free" $ Structural CommunicationFree
 
 checkProperty :: Int -> PetriNet -> Bool -> Property -> IO PropResult
 checkProperty verbosity net refine p = do
