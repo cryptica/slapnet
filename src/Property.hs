@@ -13,6 +13,7 @@ module Property
      PropResult(..),
      resultAnd,
      resultOr,
+     resultNot,
      resultsAnd,
      resultsOr)
 where
@@ -124,7 +125,7 @@ showPropertyName :: Property -> String
 showPropertyName p = showPropertyType (pcont p) ++ " property" ++
                (if null (pname p) then "" else " " ++ show (pname p))
 
-data PropResult = Satisfied | Unsatisfied | Unknown
+data PropResult = Satisfied | Unsatisfied | Unknown deriving (Show,Read)
 
 resultAnd :: PropResult -> PropResult -> PropResult
 resultAnd Satisfied x = x
@@ -137,6 +138,11 @@ resultOr Satisfied _ = Satisfied
 resultOr _ Satisfied = Satisfied
 resultOr Unsatisfied x = x
 resultOr Unknown _ = Unknown
+
+resultNot :: PropResult -> PropResult
+resultNot Satisfied = Unsatisfied
+resultNot Unsatisfied = Unsatisfied
+resultNot Unknown = Unknown
 
 resultsAnd :: [PropResult] -> PropResult
 resultsAnd = foldr resultAnd Satisfied
