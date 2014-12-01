@@ -30,7 +30,11 @@ checkStructure net FinalPlace =
         where finalPlace p = null (post net p) &&
                   all (\t -> length (post net t) == 1) (pre net p)
 checkStructure net CommunicationFree =
-        all (\t -> length (pre net t) == 1) (transitions net)
+            all checkTransition (transitions net) &&
+            all checkWeights (transitions net)
+        where checkTransition t = length (pre net t) == 1
+              checkWeights t = all checkWeight (lpre net t)
+              checkWeight (_,w) = w <= 1
 
 checkParallelT :: PetriNet -> String -> Bool
 checkParallelT net t =
