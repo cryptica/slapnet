@@ -33,7 +33,13 @@ import Solver.SComponent
 import Solver.CommFreeReachability
 
 data InputFormat = PNET | LOLA | TPN | MIST deriving (Show,Read)
-data OutputFormat = OutLOLA | OutSARA | OutSPEC | OutDOT deriving (Show,Read)
+data OutputFormat = OutLOLA | OutSARA | OutSPEC | OutDOT deriving (Read)
+
+instance Show OutputFormat where
+        show OutLOLA = "LOLA"
+        show OutSARA = "SARA"
+        show OutSPEC = "SPEC"
+        show OutDOT = "DOT"
 
 data NetTransformation = TerminationByReachability
                        | ValidateIdentifiers
