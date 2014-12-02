@@ -30,6 +30,7 @@ import Solver.StateEquation
 import Solver.TrapConstraints
 import Solver.TransitionInvariant
 import Solver.SComponent
+import Solver.CommFreeReachability
 
 data InputFormat = PNET | LOLA | TPN | MIST deriving (Show,Read)
 data OutputFormat = OutLOLA | OutSARA | OutSPEC | OutDOT deriving (Show,Read)
@@ -39,6 +40,7 @@ data NetTransformation = TerminationByReachability
 
 data ImplicitProperty = Termination
                       | DeadlockFree | DeadlockFreeUnlessFinal
+                      | FinalStateUnreachable
                       | ProperTermination
                       | Safe | Bounded Integer
                       | StructFreeChoice
@@ -132,6 +134,12 @@ options =
                }))
         ("Prove that the net is deadlock-free\n" ++
          "unless it is in the final marking")
+
+        , Option "" ["final-state-unreachable"]
+        (NoArg (\opt -> Right opt {
+                   optProperties = FinalStateUnreachable : optProperties opt
+               }))
+        "Prove that the final state is unreachable"
 
         , Option "" ["safe"]
         (NoArg (\opt -> Right opt {
@@ -316,8 +324,7 @@ placeOp op (p,w) = Atom $ LinIneq (Var p) op (Const w)
 transformNet :: (PetriNet, [Property]) -> NetTransformation ->
                (PetriNet, [Property])
 transformNet (net, props) TerminationByReachability =
-        let prime = ('\'':)
-            ps = ["'sigma", "'m1", "'m2"] ++
+        let ps = ["'sigma", "'m1", "'m2"] ++
                  places net ++ map prime (places net)
             is = [("'m1", 1)] ++
                  initials net ++ map (first prime) (initials net)
@@ -374,6 +381,11 @@ makeImplicitProperty net DeadlockFreeUnlessFinal =
             (foldl (:&:) FTrue  (map (\p -> placeOp Eq (p,0)) finals) :|:
              foldl (:|:) FFalse (map (\p -> placeOp Gt (p,0)) nonfinals)) :&:
             pf
+makeImplicitProperty net FinalStateUnreachable =
+        let (finals, nonfinals) = partition (null . lpost net) (places net)
+        in  Property "final state unreachable" $ Safety $
+             foldl (:|:) FFalse (map (\p -> placeOp Gt (p,0)) finals) :&:
+             foldl (:&:) FTrue (map (\p -> placeOp Eq (p,0)) nonfinals)
 makeImplicitProperty net (Bounded k) =
         Property (show k ++ "-bounded") $ Safety $
             foldl (:|:) FFalse
@@ -397,7 +409,7 @@ checkProperty verbosity net refine p = do
         verbosePut verbosity 1 $ "\nChecking " ++ showPropertyName p
         verbosePut verbosity 3 $ show p
         r <- case pcont p of
-            (Safety pf) -> checkSafetyProperty verbosity net refine pf []
+            (Safety pf) -> checkSafetyProperty verbosity net refine pf
             (Liveness pf) -> checkLivenessProperty verbosity net refine pf []
             (Structural ps) -> checkStructuralProperty verbosity net ps
         verbosePut verbosity 0 $ showPropertyName p ++ " " ++
@@ -408,8 +420,27 @@ checkProperty verbosity net refine p = do
         return r
 
 checkSafetyProperty :: Int -> PetriNet -> Bool ->
+        Formula -> IO PropResult
+checkSafetyProperty verbosity net refine f =
+        if checkCommunicationFree net then do
+            verbosePut verbosity 1 "Net found to be communication-free"
+            checkSafetyPropertyByCommFree verbosity net f
+        else
+            checkSafetyPropertyBySafetyRef verbosity net refine f []
+
+checkSafetyPropertyByCommFree :: Int -> PetriNet -> Formula -> IO PropResult
+checkSafetyPropertyByCommFree verbosity net f = do
+        r <- checkSat $ checkCommFreeReachabilitySat net f
+        case r of
+            Nothing -> return Satisfied
+            Just a -> do
+                verbosePut verbosity 1 "Assignment found"
+                verbosePut verbosity 3 $ "Assignment: " ++ show a
+                return Unsatisfied
+
+checkSafetyPropertyBySafetyRef :: Int -> PetriNet -> Bool ->
         Formula -> [[String]] -> IO PropResult
-checkSafetyProperty verbosity net refine f traps = do
+checkSafetyPropertyBySafetyRef verbosity net refine f traps = do
         r <- checkSat $ checkStateEquationSat net f traps
         case r of
             Nothing -> return Satisfied
@@ -431,8 +462,8 @@ checkSafetyProperty verbosity net refine f traps = do
                                                       show trap
                             verbosePut verbosity 3 $ "Trap assignment: " ++
                                                       show at
-                            checkSafetyProperty verbosity net refine f
-                                                (trap:traps)
+                            checkSafetyPropertyBySafetyRef verbosity net
+                                                refine f (trap:traps)
                 else
                     return Unknown
 

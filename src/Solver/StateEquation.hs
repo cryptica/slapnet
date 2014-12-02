@@ -19,8 +19,11 @@ placeConstraints net m = bAnd $ map checkPlaceEquation $ places net
                 in  pinit + sum incoming - sum outgoing .== mVal m p
               addTransition (t,w) = literal w * mVal m t
 
-nonnegativityConstraints ::  ModelSI -> SBool
-nonnegativityConstraints m = bAnd $ map (.>= 0) $ mValues m
+nonNegativityConstraints :: PetriNet -> ModelSI -> SBool
+nonNegativityConstraints net m =
+            bAnd (map checkNonNegativity (places net)) &&&
+            bAnd (map checkNonNegativity (transitions net))
+        where checkNonNegativity x = mVal m x .>= 0
 
 checkTraps :: [[String]] -> ModelSI -> SBool
 checkTraps traps m = bAnd $ map checkTrapDelta traps
@@ -29,7 +32,7 @@ checkTraps traps m = bAnd $ map checkTrapDelta traps
 checkStateEquation :: PetriNet -> Formula -> [[String]] -> ModelSI -> SBool
 checkStateEquation net f traps m =
         placeConstraints net m &&&
-        nonnegativityConstraints m &&&
+        nonNegativityConstraints net m &&&
         checkTraps traps m &&&
         evaluateFormula f m
 

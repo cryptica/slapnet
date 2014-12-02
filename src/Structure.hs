@@ -1,7 +1,8 @@
 module Structure
     (Structure(..),
      checkStructure,
-     checkParallelT)
+     checkParallelT,
+     checkCommunicationFree)
 where
 
 import PetriNet
@@ -29,7 +30,10 @@ checkStructure net FinalPlace =
             length (filter finalPlace (places net)) == 1
         where finalPlace p = null (post net p) &&
                   all (\t -> length (post net t) == 1) (pre net p)
-checkStructure net CommunicationFree =
+checkStructure net CommunicationFree = checkCommunicationFree net
+
+checkCommunicationFree :: PetriNet -> Bool
+checkCommunicationFree net =
             all checkTransition (transitions net) &&
             all checkWeights (transitions net)
         where checkTransition t = length (pre net t) == 1

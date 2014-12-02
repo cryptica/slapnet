@@ -9,9 +9,6 @@ import Data.List (partition)
 import PetriNet
 import Solver
 
-prime :: String -> String
-prime = ('\'':)
-
 checkPrePostPlaces :: PetriNet -> ModelSI -> SBool
 checkPrePostPlaces net m =
             bAnd $ map checkPrePostPlace $ places net

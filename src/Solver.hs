@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
 
 module Solver
-    (checkSat,ModelSI,ModelSB,ModelI,ModelB,
+    (prime,checkSat,ModelSI,ModelSB,ModelI,ModelB,
      Model(..),mVal,mValues,mElemsWith,mElemSum,SModel(..),CModel(..))
 where
 
@@ -17,6 +17,9 @@ type ModelSI = Model SInteger
 type ModelSB = Model SBool
 type ModelI = Model Integer
 type ModelB = Model Bool
+
+prime :: String -> String
+prime = ('\'':)
 
 mVal :: Model a -> String -> a
 mVal m x = M.findWithDefault (error ("key not found: " ++ x)) x (getMap m)
