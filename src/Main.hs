@@ -116,7 +116,7 @@ options =
           }))
         "Prove termination by reducing it to reachability"
 
-        , Option "" ["terminating"]
+        , Option "" ["termination"]
         (NoArg (\opt -> Right opt {
                    optProperties = Termination : optProperties opt
                }))
