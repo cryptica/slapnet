@@ -8,7 +8,6 @@ import PetriNet
 import Property
 import Solver
 import Solver.StateEquation
-import Debug.Trace
 
 checkSubnet :: PetriNet -> ModelSI -> SBool
 checkSubnet net m =
@@ -31,11 +30,9 @@ checkNodes net m =
         where checkNode p =
                       mVal m (prime p) .> 0 ==> bOr (map checkPreCond (pre net p))
                   where checkPreCond t =
-                           trace ("checking '" ++ p ++ " > 0 => '" ++ p ++ " > '" ++ head (pre net t)
-                                  ++ " ^ " ++ t ++ " > 0")
-                           (mVal m (prime p) .>
-                              mVal m (prime (head (pre net t))) &&&
-                           mVal m t .> 0)
+                           mVal m (prime p) .==
+                              mVal m (prime (head (pre net t))) + 1 &&&
+                           mVal m t .> 0
 
 checkMarkableSubnet :: PetriNet -> ModelSI -> SBool
 checkMarkableSubnet net m =
