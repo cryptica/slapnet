@@ -37,10 +37,12 @@ petri net "Peterson's algorithm" {
     }
 }
 liveness property "fairness for first process" {
-    u6 > 0 && u4 + u5 = 0 && v4 + v5 > 0
+    u1 + u2 + u3 + u4 + u5 + u6 + u7 > 0 && u4 + u5 = 0 &&
+    v1 + v2 + v3 + v4 + v5 + v6 + v7 > 0
 }
 liveness property "fairness for second process" {
-    v6 > 0 && v4 + v5 = 0 && u4 + u5 > 0
+    u1 + u2 + u3 + u4 + u5 + u6 + u7 > 0 &&
+    v1 + v2 + v3 + v4 + v5 + v6 + v7 > 0 && v4 + v5 = 0
 }
 safety property "mutual exclusion" {
     p4 >= 1 && q4 >= 1
