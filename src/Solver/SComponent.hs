@@ -1,6 +1,8 @@
 module Solver.SComponent
     (checkSComponent,checkSComponentSat,
-     getSComponentOutIn)
+     getSComponentOutIn,
+     getSComponentCompsCut,
+     SCompCut)
 where
 
 import Data.SBV
@@ -8,6 +10,8 @@ import Data.List (partition)
 
 import PetriNet
 import Solver
+
+type SCompCut = ([String], [String], [String])
 
 checkPrePostPlaces :: PetriNet -> ModelSI -> SBool
 checkPrePostPlaces net m =
@@ -71,4 +75,11 @@ checkSComponentSat net fired ax =
 getSComponentOutIn :: PetriNet -> ModelI -> ModelI -> ([String], [String])
 getSComponentOutIn net ax as =
         partition (cElem ax) $ filter (cElem as) (transitions net)
+
+-- TODO: use strongly connected components and min cuts
+getSComponentCompsCut :: PetriNet -> ModelI -> ModelI -> SCompCut
+getSComponentCompsCut net ax as =
+        let (t, u) = partition (cElem ax) $ filter (cElem as) (transitions net)
+            (t1, t2) = partition (cElem as . prime) t
+        in  (t1, t2, u)
 

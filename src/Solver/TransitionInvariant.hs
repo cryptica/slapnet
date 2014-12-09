@@ -8,6 +8,7 @@ import Data.SBV
 import PetriNet
 import Property
 import Solver
+import Solver.SComponent
 import Solver.Formula
 
 tInvariantConstraints :: PetriNet -> ModelSI -> SBool
@@ -25,14 +26,15 @@ finalInvariantConstraints m = sum (mValues m) .> 0
 nonnegativityConstraints :: ModelSI -> SBool
 nonnegativityConstraints m = bAnd $ map (.>= 0) $ mValues m
 
-checkSComponentTransitions :: [([String],[String])] -> ModelSI -> SBool
-checkSComponentTransitions strans m = bAnd $ map checkInOut strans
-        where checkInOut (sOut,sIn) =
-                bAnd (map (\t -> mVal m t .> 0) sOut) ==>
-                bOr (map (\t -> mVal m t .> 0) sIn)
+checkSComponentTransitions :: [SCompCut] -> ModelSI -> SBool
+checkSComponentTransitions strans m = bAnd $ map checkCompsCut strans
+        where checkCompsCut (t1,t2,u) =
+                bOr (map (\t -> mVal m t .> 0) t1) &&&
+                bOr (map (\t -> mVal m t .> 0) t2) ==>
+                bOr (map (\t -> mVal m t .> 0) u)
 
-checkTransitionInvariant :: PetriNet -> Formula -> [([String],[String])] ->
-        ModelSI -> SBool
+checkTransitionInvariant :: PetriNet -> Formula ->
+        [SCompCut] -> ModelSI -> SBool
 checkTransitionInvariant net f strans m =
         tInvariantConstraints net m &&&
         nonnegativityConstraints m &&&
@@ -40,8 +42,8 @@ checkTransitionInvariant net f strans m =
         checkSComponentTransitions strans m &&&
         evaluateFormula f m
 
-checkTransitionInvariantSat :: PetriNet -> Formula -> [([String],[String])] ->
-        ([String], ModelSI -> SBool)
+checkTransitionInvariantSat :: PetriNet -> Formula ->
+        [SCompCut] -> ([String], ModelSI -> SBool)
 checkTransitionInvariantSat net f strans =
         (transitions net, checkTransitionInvariant net f strans)
 

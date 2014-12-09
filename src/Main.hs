@@ -474,7 +474,7 @@ checkSafetyPropertyBySafetyRef verbosity net refine f traps = do
                     return Unknown
 
 checkLivenessProperty :: Int -> PetriNet -> Bool ->
-        Formula -> [([String],[String])] -> IO PropResult
+        Formula -> [SCompCut] -> IO PropResult
 checkLivenessProperty verbosity net refine f strans = do
         r <- checkSat $ checkTransitionInvariantSat net f strans
         case r of
@@ -491,13 +491,13 @@ checkLivenessProperty verbosity net refine f strans = do
                             verbosePut verbosity 1 "No S-component found"
                             return Unknown
                         Just as -> do
-                            let sOutIn = getSComponentOutIn net ax as
+                            let sCompsCut = getSComponentCompsCut net ax as
                             verbosePut verbosity 1 "S-component found"
-                            verbosePut verbosity 2 $ "Out/In: " ++ show sOutIn
+                            verbosePut verbosity 2 $ "Comps/Cut: " ++ show sCompsCut
                             verbosePut verbosity 3 $ "S-Component assignment: " ++
                                                       show as
                             checkLivenessProperty verbosity net refine f
-                                                  (sOutIn:strans)
+                                                  (sCompsCut:strans)
                 else
                     return Unknown
 
