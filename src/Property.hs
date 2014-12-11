@@ -26,6 +26,7 @@ data Term = Var String
           | Term :+: Term
           | Term :-: Term
           | Term :*: Term
+          deriving (Eq)
 
 instance Show Term where
         show (Var x) = x
@@ -43,7 +44,7 @@ renameTerm f (t :+: u) = renameTerm f t :+: renameTerm f u
 renameTerm f (t :-: u) = renameTerm f t :-: renameTerm f u
 renameTerm f (t :*: u) = renameTerm f t :*: renameTerm f u
 
-data Op = Gt | Ge | Eq | Ne | Le | Lt
+data Op = Gt | Ge | Eq | Ne | Le | Lt deriving (Eq)
 
 instance Show Op where
         show Gt = ">"
@@ -54,7 +55,7 @@ instance Show Op where
         show Lt = "<"
 
 -- TODO: merge LinIneq constructor into Formula
-data LinearInequation = LinIneq Term Op Term
+data LinearInequation = LinIneq Term Op Term deriving (Eq)
 
 instance Show LinearInequation where
         show (LinIneq lhs op rhs) = show lhs ++ " " ++ show op ++ " " ++ show rhs
@@ -68,6 +69,7 @@ data Formula = FTrue | FFalse
              | Neg Formula
              | Formula :&: Formula
              | Formula :|: Formula
+             deriving (Eq)
 
 infixr 3 :&:
 infixr 2 :|:
@@ -125,7 +127,7 @@ showPropertyName :: Property -> String
 showPropertyName p = showPropertyType (pcont p) ++ " property" ++
                (if null (pname p) then "" else " " ++ show (pname p))
 
-data PropResult = Satisfied | Unsatisfied | Unknown deriving (Show,Read)
+data PropResult = Satisfied | Unsatisfied | Unknown deriving (Show,Read,Eq)
 
 resultAnd :: PropResult -> PropResult -> PropResult
 resultAnd Satisfied x = x

@@ -29,6 +29,7 @@ import Solver
 import Solver.StateEquation
 import Solver.TrapConstraints
 import Solver.TransitionInvariant
+import Solver.LivenessInvariant
 import Solver.SComponent
 import Solver.CommFreeReachability
 
@@ -62,6 +63,7 @@ data Options = Options { inputFormat :: InputFormat
                        , optProperties :: [ImplicitProperty]
                        , optTransformations :: [NetTransformation]
                        , optRefine :: Bool
+                       , optInvariant :: Bool
                        , optOutput :: Maybe String
                        , outputFormat :: OutputFormat
                        , optUseProperties :: Bool
@@ -76,6 +78,7 @@ startOptions = Options { inputFormat = PNET
                        , optProperties = []
                        , optTransformations = []
                        , optRefine = True
+                       , optInvariant = False
                        , optOutput = Nothing
                        , outputFormat = OutLOLA
                        , optUseProperties = True
@@ -190,6 +193,10 @@ options =
         (NoArg (\opt -> Right opt { optRefine = False }))
         "Don't use refinement"
 
+        , Option "i" ["invariant"]
+        (NoArg (\opt -> Right opt { optInvariant = True }))
+        "Try to generate an invariant"
+
         , Option "o" ["output"]
         (ReqArg (\arg opt -> Right opt {
                         optOutput = Just arg
@@ -298,11 +305,11 @@ structuralAnalysis net =  do
         putStrLn $ "Final places       : " ++ show (length finalP)
         putStrLn $ "Final transitions  : " ++ show (length finalT)
 
-checkFile :: Parser (PetriNet,[Property]) -> Int -> Bool ->
+checkFile :: Parser (PetriNet,[Property]) -> Int -> Bool -> Bool ->
             [ImplicitProperty] -> [NetTransformation] ->
             Bool -> Maybe String -> OutputFormat -> Bool -> String ->
             IO PropResult
-checkFile parser verbosity refine implicitProperties transformations
+checkFile parser verbosity refine invariant implicitProperties transformations
           useProperties output format printStruct file = do
         verbosePut verbosity 0 $ "Reading \"" ++ file ++ "\""
         (net,props) <- parseFile parser file
@@ -320,7 +327,7 @@ checkFile parser verbosity refine implicitProperties transformations
                 writeFiles verbosity outputfile format net' props'''
             Nothing -> return ()
         -- TODO: short-circuit?
-        rs <- mapM (checkProperty verbosity net' refine) props'''
+        rs <- mapM (checkProperty verbosity net' refine invariant) props'''
         verbosePut verbosity 0 ""
         return $ resultsAnd rs
 
@@ -410,13 +417,13 @@ makeImplicitProperty _ StructFinalPlace =
 makeImplicitProperty _ StructCommunicationFree =
         Property "communication free" $ Structural CommunicationFree
 
-checkProperty :: Int -> PetriNet -> Bool -> Property -> IO PropResult
-checkProperty verbosity net refine p = do
+checkProperty :: Int -> PetriNet -> Bool -> Bool -> Property -> IO PropResult
+checkProperty verbosity net refine invariant p = do
         verbosePut verbosity 1 $ "\nChecking " ++ showPropertyName p
         verbosePut verbosity 3 $ show p
         r <- case pcont p of
-            (Safety pf) -> checkSafetyProperty verbosity net refine pf
-            (Liveness pf) -> checkLivenessProperty verbosity net refine pf []
+            (Safety pf) -> checkSafetyProperty verbosity net refine invariant pf
+            (Liveness pf) -> checkLivenessProperty verbosity net refine invariant pf
             (Structural ps) -> checkStructuralProperty verbosity net ps
         verbosePut verbosity 0 $ showPropertyName p ++ " " ++
             case r of
@@ -425,14 +432,19 @@ checkProperty verbosity net refine p = do
                 Unknown-> "may not be satisfied."
         return r
 
-checkSafetyProperty :: Int -> PetriNet -> Bool ->
+checkSafetyProperty :: Int -> PetriNet -> Bool -> Bool ->
         Formula -> IO PropResult
-checkSafetyProperty verbosity net refine f =
-        if checkCommunicationFree net then do
-            verbosePut verbosity 1 "Net found to be communication-free"
-            checkSafetyPropertyByCommFree verbosity net f
+checkSafetyProperty verbosity net refine invariant f =
+        -- TODO: add invariant generation
+        if invariant then
+            error "Invariant generation for safety properties not yet supported"
         else
-            checkSafetyPropertyBySafetyRef verbosity net refine f []
+            -- TODO: add flag for this kind of structural check
+            if checkCommunicationFree net then do
+                verbosePut verbosity 1 "Net found to be communication-free"
+                checkSafetyPropertyByCommFree verbosity net f
+            else
+                checkSafetyPropertyBySafetyRef verbosity net refine f []
 
 checkSafetyPropertyByCommFree :: Int -> PetriNet -> Formula -> IO PropResult
 checkSafetyPropertyByCommFree verbosity net f = do
@@ -473,12 +485,35 @@ checkSafetyPropertyBySafetyRef verbosity net refine f traps = do
                 else
                     return Unknown
 
-checkLivenessProperty :: Int -> PetriNet -> Bool ->
+checkLivenessProperty :: Int -> PetriNet -> Bool -> Bool ->
+        Formula -> IO PropResult
+checkLivenessProperty verbosity net refine invariant f = do
+        (r, comps) <- checkLivenessPropertyByRef verbosity net refine f []
+        if (r == Satisfied && invariant) then
+            generateLivenessInvariant verbosity net f comps
+        else
+            return r
+
+generateLivenessInvariant :: Int -> PetriNet ->
         Formula -> [SCompCut] -> IO PropResult
-checkLivenessProperty verbosity net refine f strans = do
-        r <- checkSat $ checkTransitionInvariantSat net f strans
+generateLivenessInvariant verbosity net f comps = do
+        verbosePut verbosity 1 "Generating invariant"
+        if f /= FTrue then
+            error "formula not yet supported"
+        else do
+            r <- checkSat $ checkLivenessInvariantSat net comps
+            case r of
+                Nothing -> return Unsatisfied
+                Just as -> do
+                    putStrLn $ show as
+                    return Satisfied
+
+checkLivenessPropertyByRef :: Int -> PetriNet -> Bool ->
+        Formula -> [SCompCut] -> IO (PropResult, [SCompCut])
+checkLivenessPropertyByRef verbosity net refine f comps = do
+        r <- checkSat $ checkTransitionInvariantSat net f comps
         case r of
-            Nothing -> return Satisfied
+            Nothing -> return (Satisfied, comps)
             Just ax -> do
                 let fired = firedTransitionsFromAssignment ax
                 verbosePut verbosity 1 "Assignment found"
@@ -489,17 +524,17 @@ checkLivenessProperty verbosity net refine f strans = do
                     case rt of
                         Nothing -> do
                             verbosePut verbosity 1 "No S-component found"
-                            return Unknown
+                            return (Unknown, comps)
                         Just as -> do
                             let sCompsCut = getSComponentCompsCut net ax as
                             verbosePut verbosity 1 "S-component found"
                             verbosePut verbosity 2 $ "Comps/Cut: " ++ show sCompsCut
                             verbosePut verbosity 3 $ "S-Component assignment: " ++
                                                       show as
-                            checkLivenessProperty verbosity net refine f
-                                                  (sCompsCut:strans)
+                            checkLivenessPropertyByRef verbosity net refine f
+                                                  (sCompsCut:comps)
                 else
-                    return Unknown
+                    return (Unknown, comps)
 
 checkStructuralProperty :: Int -> PetriNet -> Structure -> IO PropResult
 checkStructuralProperty _ net struct =
@@ -521,6 +556,7 @@ main = do
                 when (null files) (exitErrorWith "No input file given")
                 let verbosity = optVerbosity opts
                     refinement = optRefine opts
+                    invariant = optInvariant opts
                 let parser = case inputFormat opts of
                                  PNET -> PNET.parseContent
                                  LOLA -> LOLA.parseContent
@@ -528,9 +564,10 @@ main = do
                                  MIST -> MIST.parseContent
                 let properties = reverse $ optProperties opts
                 let transformations = reverse $ optTransformations opts
-                rs <- mapM (checkFile parser verbosity refinement properties
-                     transformations (optUseProperties opts) (optOutput opts)
-                     (outputFormat opts) (optPrintStructure opts)) files
+                rs <- mapM (checkFile parser verbosity refinement invariant
+                     properties transformations (optUseProperties opts)
+                     (optOutput opts) (outputFormat opts) (optPrintStructure opts))
+                     files
                 -- TODO: short-circuit with Control.Monad.Loops?
                 case resultsAnd rs of
                     Satisfied ->
