@@ -1,29 +1,48 @@
 module Solver.LivenessInvariant (
     checkLivenessInvariant
   , checkLivenessInvariantSat
+  , generateCuts
   , getLivenessInvariant
   , PlaceVector
-  , LivenessInvariant
+  , LivenessInvariant(..)
 ) where
 
 import Data.SBV
+import Data.List (intercalate)
 
 import Solver
 import Solver.SComponent
+import Property
 import PetriNet
 
 type PlaceVector = [(String, Integer)]
-type LivenessInvariant = [PlaceVector]
+newtype LivenessInvariant =
+        LivenessInvariant { getInv :: (String, [Cut], PlaceVector) }
+
+instance Show LivenessInvariant where
+        show (LivenessInvariant (n, cs, xs)) = n ++ " [" ++
+                    intercalate " ∧ " (map showTrans cs) ++ "]: " ++
+                    intercalate " + " (map showPlace (filter ((> 0) . snd) xs))
+                where showPlace (p, w) = show w ++ p
+                      showTrans (ts, b) =
+                          if b then
+                               intercalate " ∧ " (map (++ " ∉ σ") ts)
+                          else
+                               let d = intercalate " ∨ " (map (++ " ∈ σ") ts)
+                               in  if length ts == 1 then d else "(" ++ d ++ ")"
 
 type Cut = ([String], Bool)
 type NamedCut = (String, [(String, Cut)])
 
-nameCuts :: [[Cut]] -> [NamedCut]
-nameCuts cuts =
-            map (\(n, c) -> (n, numPref "@comp" `zip` c)) $
-                numPref "@cut" `zip` cuts
+generateCuts :: Formula -> [SCompCut] -> [NamedCut]
+generateCuts f comps =
+            zipWith nameCut
+                (numPref "@part")
+                (foldl combine [formulaToCut f] comps)
         where
+            nameCut n c = (n, numPref "@comp" `zip` c)
             numPref s = map (\i -> s ++ show i) [(1::Integer)..]
+            combine cuts compCut = [x : c | x <- compCut, c <- cuts]
 
 varNames :: PetriNet -> [NamedCut] -> [String]
 varNames net = concatMap cutNames
@@ -33,12 +52,25 @@ varNames net = concatMap cutNames
                 map (\p -> n ++ "@p" ++ p) (places net) ++
                 map (\(n', _) -> n ++ n') c
 
-foldComps :: [SCompCut] -> [[Cut]]
-foldComps = foldl combine [[]]
+formulaToCut :: Formula -> SCompCut
+formulaToCut = transformConj
         where
-            combine cuts (t1, t2, u) =
-                concatMap
-                    (\c -> [(t1, True) : c, (t2, True) : c, (u, False) : c]) cuts
+            transformConj FTrue = []
+            transformConj (p :&: q) = transformConj p ++ transformConj q
+            transformConj (Atom lieq) = transformLieq lieq
+            transformConj form =
+                error $ "formula not supported for invariant: " ++ show form
+            transformLieq (LinIneq ts Gt (Const 0)) = [(transformTerm ts, False)]
+            transformLieq (LinIneq ts Ge (Const 1)) = [(transformTerm ts, False)]
+            transformLieq (LinIneq ts Eq (Const 0)) = [(transformTerm ts, True)]
+            transformLieq (LinIneq ts Le (Const 0)) = [(transformTerm ts, True)]
+            transformLieq (LinIneq ts Lt (Const 1)) = [(transformTerm ts, True)]
+            transformLieq l =
+                error $ "linear inequation not supported for invariant: " ++ show l
+            transformTerm (t :+: u) = transformTerm t ++ transformTerm u
+            transformTerm (Var x) = [x]
+            transformTerm t =
+                error $ "term not supported for invariant: " ++ show t
 
 checkCut :: PetriNet -> ModelSI -> NamedCut -> SBool
 checkCut net m (n, comps) =
@@ -67,13 +99,14 @@ checkLivenessInvariant :: PetriNet -> [NamedCut] ->
 checkLivenessInvariant net cuts m =
         bAnd (map (checkCut net m) cuts)
 
-checkLivenessInvariantSat :: PetriNet -> [SCompCut] ->
+checkLivenessInvariantSat :: PetriNet -> [NamedCut] ->
         ([String], ModelSI -> SBool)
-checkLivenessInvariantSat net comps =
-        let cuts = foldComps comps
-            namedCuts = nameCuts cuts
-            names = varNames net namedCuts
-        in  (names, checkLivenessInvariant net namedCuts)
+checkLivenessInvariantSat net cuts =
+        (varNames net cuts, checkLivenessInvariant net cuts)
 
-getLivenessInvariant :: PetriNet -> [SCompCut] -> ModelI -> LivenessInvariant
-getLivenessInvariant net ax as = undefined
+getLivenessInvariant :: PetriNet -> [NamedCut] -> ModelI -> [LivenessInvariant]
+getLivenessInvariant net cuts as = map lookupCut cuts
+        where lookupCut (n, c) = LivenessInvariant
+               (n, map snd c, map (\p -> (p, mVal as (n ++ "@p" ++ p))) (places net))
+
+

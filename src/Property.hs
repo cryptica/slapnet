@@ -90,6 +90,8 @@ renameFormula f (Neg p) = Neg (renameFormula f p)
 renameFormula f (p :&: q) = renameFormula f p :&: renameFormula f q
 renameFormula f (p :|: q) = renameFormula f p :|: renameFormula f q
 
+-- TODO: add functions to transform formula to CNF/DNF
+
 data PropertyType = SafetyType
                   | LivenessType
                   | StructuralType

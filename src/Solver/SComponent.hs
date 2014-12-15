@@ -11,7 +11,7 @@ import Data.List (partition)
 import PetriNet
 import Solver
 
-type SCompCut = ([String], [String], [String])
+type SCompCut = [([String], Bool)]
 
 checkPrePostPlaces :: PetriNet -> ModelSI -> SBool
 checkPrePostPlaces net m =
@@ -81,5 +81,5 @@ getSComponentCompsCut :: PetriNet -> ModelI -> ModelI -> SCompCut
 getSComponentCompsCut net ax as =
         let (t, u) = partition (cElem ax) $ filter (cElem as) (transitions net)
             (t1, t2) = partition (cElem as . prime) t
-        in  (t1, t2, u)
+        in  [(t1, True), (t2, True), (u, False)]
 

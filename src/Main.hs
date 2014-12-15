@@ -435,16 +435,17 @@ checkProperty verbosity net refine invariant p = do
 checkSafetyProperty :: Int -> PetriNet -> Bool -> Bool ->
         Formula -> IO PropResult
 checkSafetyProperty verbosity net refine invariant f =
-        -- TODO: add invariant generation
-        if invariant then
-            error "Invariant generation for safety properties not yet supported"
-        else
-            -- TODO: add flag for this kind of structural check
-            if checkCommunicationFree net then do
-                verbosePut verbosity 1 "Net found to be communication-free"
-                checkSafetyPropertyByCommFree verbosity net f
+        -- TODO: add flag for this kind of structural check
+        if checkCommunicationFree net then do
+            verbosePut verbosity 1 "Net found to be communication-free"
+            checkSafetyPropertyByCommFree verbosity net f
+        else do
+            r <- checkSafetyPropertyBySafetyRef verbosity net refine f []
+            if r == Satisfied && invariant then
+                -- TODO: add invariant generation
+                error "Invariant generation for safety properties not yet supported"
             else
-                checkSafetyPropertyBySafetyRef verbosity net refine f []
+                return r
 
 checkSafetyPropertyByCommFree :: Int -> PetriNet -> Formula -> IO PropResult
 checkSafetyPropertyByCommFree verbosity net f = do
@@ -489,7 +490,7 @@ checkLivenessProperty :: Int -> PetriNet -> Bool -> Bool ->
         Formula -> IO PropResult
 checkLivenessProperty verbosity net refine invariant f = do
         (r, comps) <- checkLivenessPropertyByRef verbosity net refine f []
-        if (r == Satisfied && invariant) then
+        if r == Satisfied && invariant then
             generateLivenessInvariant verbosity net f comps
         else
             return r
@@ -498,15 +499,14 @@ generateLivenessInvariant :: Int -> PetriNet ->
         Formula -> [SCompCut] -> IO PropResult
 generateLivenessInvariant verbosity net f comps = do
         verbosePut verbosity 1 "Generating invariant"
-        if f /= FTrue then
-            error "formula not yet supported"
-        else do
-            r <- checkSat $ checkLivenessInvariantSat net comps
-            case r of
-                Nothing -> return Unsatisfied
-                Just as -> do
-                    putStrLn $ show as
-                    return Satisfied
+        let cuts = generateCuts f comps
+        r <- checkSat $ checkLivenessInvariantSat net cuts
+        case r of
+            Nothing -> return Unsatisfied
+            Just as -> do
+                let inv = getLivenessInvariant net cuts as
+                mapM_ print inv
+                return Satisfied
 
 checkLivenessPropertyByRef :: Int -> PetriNet -> Bool ->
         Formula -> [SCompCut] -> IO (PropResult, [SCompCut])

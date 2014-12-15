@@ -27,11 +27,12 @@ nonnegativityConstraints :: ModelSI -> SBool
 nonnegativityConstraints m = bAnd $ map (.>= 0) $ mValues m
 
 checkSComponentTransitions :: [SCompCut] -> ModelSI -> SBool
-checkSComponentTransitions strans m = bAnd $ map checkCompsCut strans
-        where checkCompsCut (t1,t2,u) =
-                bOr (map (\t -> mVal m t .> 0) t1) &&&
-                bOr (map (\t -> mVal m t .> 0) t2) ==>
-                bOr (map (\t -> mVal m t .> 0) u)
+checkSComponentTransitions comps m =
+            bAnd $ map (bOr . map checkCompsCut) comps
+        where checkCompsCut (ts,w) =
+              -- TODO: check how changing the representation changes result
+                let tc t = mVal m t .> 0
+                in  if w then bnot (bOr (map tc ts)) else bOr (map tc ts)
 
 checkTransitionInvariant :: PetriNet -> Formula ->
         [SCompCut] -> ModelSI -> SBool
