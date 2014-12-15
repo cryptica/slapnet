@@ -14,9 +14,9 @@ import Property
 
 renderNet :: PetriNet -> Builder
 renderNet net =
-        let showWeight (p,x) = stringUtf8 p <> ":" <> integerDec x
+        let showWeight (p,x) = renderPlace p <> ":" <> integerDec x
             ps = "PLACE " <> intercalate ","
-                    (map stringUtf8 (places net)) <> ";\n"
+                    (map renderPlace (places net)) <> ";\n"
             is = "MARKING " <> intercalate ","
                     (map showWeight (initials net)) <> ";\n"
             makeTransition t =
@@ -25,7 +25,7 @@ renderNet net =
                                 (map showWeight preT) <> ";\n"
                     postS = "PRODUCE " <> intercalate ","
                                 (map showWeight postT) <> ";\n"
-                in  "TRANSITION " <> stringUtf8 t <> "\n" <> preS <> postS
+                in  "TRANSITION " <> renderTransition t <> "\n" <> preS <> postS
             ts = map makeTransition (transitions net)
         in  intercalate "\n" (ps:is:ts)
 

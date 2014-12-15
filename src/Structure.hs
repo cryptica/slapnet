@@ -40,7 +40,7 @@ checkCommunicationFree net =
               checkWeights t = all checkWeight (lpre net t)
               checkWeight (_,w) = w <= 1
 
-checkParallelT :: PetriNet -> String -> Bool
+checkParallelT :: PetriNet -> Transition -> Bool
 checkParallelT net t =
                   any postComp [(p,s) | p <- post net t, s <- post net t]
         where postComp (p,s) =
