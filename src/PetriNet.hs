@@ -1,46 +1,63 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 module PetriNet
-    (PetriNet,name,showNetName,places,transitions,initial,
+    (Marking,tokens,buildMarking,
+     PetriNet,name,showNetName,places,transitions,initial,initialMarking,
      pre,lpre,post,lpost,initials,context,arcs,ghostTransitions,
      makePetriNet,makePetriNetWithTrans)
 where
 
 import qualified Data.Map as M
 
+type Place = String
+type Transition = String
+type Node = String
+newtype Marking = Marking { getMarkingMap :: M.Map Place Integer }
+
+instance Show Marking where
+        show (Marking m) = unwords $ map showPlaceMarking $ M.toList m
+            where showPlaceMarking (n,i) =
+                    n ++ (if i /= 1 then "[" ++ show i ++ "]" else "")
+
+tokens :: Marking -> Place -> Integer
+tokens m p = M.findWithDefault 0 p (getMarkingMap m)
+
+buildMarking :: [(Place, Integer)] -> Marking
+buildMarking xs = Marking $ M.fromList $ filter ((/=0) . snd) xs
+
 data PetriNet = PetriNet {
         name :: String,
-        places :: [String],
-        transitions :: [String],
-        adjacency :: M.Map String ([(String,Integer)], [(String,Integer)]),
-        initMap :: M.Map String Integer,
-        ghostTransitions :: [String]
+        places :: [Place],
+        transitions :: [Transition],
+        adjacency :: M.Map Node ([(Node,Integer)], [(Node,Integer)]),
+        initialMarking :: Marking,
+        ghostTransitions :: [Transition]
 }
 
-initial :: PetriNet -> String -> Integer
-initial net p = M.findWithDefault 0 p (initMap net)
+initial :: PetriNet -> Place -> Integer
+initial net = tokens (initialMarking net)
 
-arcs :: PetriNet -> [(String, String, Integer)]
+arcs :: PetriNet -> [(Node, Node, Integer)]
 arcs net = concatMap (\(a,(_,bs)) -> map (\(b,w) -> (a,b,w)) bs)
                            (M.toList (adjacency net))
 
-context :: PetriNet -> String -> ([(String, Integer)], [(String, Integer)])
+context :: PetriNet -> Node -> ([(Node, Integer)], [(Node, Integer)])
 context net x = M.findWithDefault ([],[]) x (adjacency net)
 
-pre :: PetriNet -> String -> [String]
+pre :: PetriNet -> Node -> [Node]
 pre net = map fst . fst . context net
 
-lpre :: PetriNet -> String -> [(String, Integer)]
+lpre :: PetriNet -> Node -> [(Node, Integer)]
 lpre net = fst . context net
 
-post :: PetriNet -> String -> [String]
+post :: PetriNet -> Node -> [Node]
 post net = map fst . snd . context net
 
-lpost :: PetriNet -> String -> [(String, Integer)]
+lpost :: PetriNet -> Node -> [(Node, Integer)]
 lpost net = snd . context net
 
-initials :: PetriNet -> [(String,Integer)]
-initials net = M.toList (initMap net)
+initials :: PetriNet -> [(Place,Integer)]
+initials net = M.toList (getMarkingMap (initialMarking net))
 
 showNetName :: PetriNet -> String
 showNetName net = "Petri net" ++
@@ -54,19 +71,15 @@ instance Show PetriNet where
                         (map (\(s,(l,r)) -> show l ++ " -> " ++
                             s ++ " -> " ++ show r)
                         (M.toList (adjacency net))) ++
-                   "Initial: " ++ unwords
-                        (map (\(n,i) -> n ++
-                            (if i /= 1 then "[" ++ show i ++ "]" else []))
-                        (M.toList (initMap net))) ++
+                   "Initial: " ++ show (initialMarking net) ++
                    "\nGhost transitions: " ++ unwords (ghostTransitions net)
 
-makePetriNet :: String -> [String] -> [String] ->
-        [(String, String, Integer)] -> [(String, Integer)] -> [String] -> PetriNet
+makePetriNet :: String -> [Place] -> [Transition] ->
+        [(Node, Node, Integer)] -> [(Place, Integer)] -> [Transition] -> PetriNet
 makePetriNet name places transitions arcs initial gs =
         let adjacency = foldl buildMap M.empty $ filter (\(_,_,w) -> w /= 0) arcs
-            initMap = M.fromList $ filter ((/=0) . snd) initial
         in  PetriNet { name=name, places=places, transitions=transitions,
-                       adjacency=adjacency, initMap=initMap,
+                       adjacency=adjacency, initialMarking=buildMarking initial,
                        ghostTransitions=gs }
         where
             buildMap m (l,r,w) =
@@ -75,9 +88,9 @@ makePetriNet name places transitions arcs initial gs =
               in  m''
             addArc (lNew,rNew) (lOld,rOld) = (lNew ++ lOld,rNew ++ rOld)
 
-makePetriNetWithTrans :: String -> [String] ->
-        [(String, [(String, Integer)], [(String, Integer)])] ->
-        [(String, Integer)] -> [String] -> PetriNet
+makePetriNetWithTrans :: String -> [Place] ->
+        [(Transition, [(Place, Integer)], [(Place, Integer)])] ->
+        [(Place, Integer)] -> [Transition] -> PetriNet
 makePetriNetWithTrans name places ts initial gs =
         let transitions = [ t | (t,_,_) <- ts ]
             arcs = [ (i,t,w) | (t,is,_) <- ts, (i,w) <- is ] ++
