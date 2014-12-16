@@ -58,7 +58,7 @@ renderDisjunction propname filename net f =
         "FILE " <> stringUtf8 (reverse (takeWhile (/='/') (reverse filename)))
             <> " TYPE LOLA;\n" <>
         "INITIAL " <> intercalate ","
-            (map (\(p,i) -> renderPlace p <> ":" <> integerDec i) (initials net))
+            (map (\(p,i) -> renderPlace p <> ":" <> integerDec i) (linitials net))
             <> ";\n" <>
         "FINAL COVER;\n" <>
         "CONSTRAINTS " <> renderConjunction f <> ";"

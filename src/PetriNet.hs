@@ -2,12 +2,12 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 module PetriNet
-    (PetriNet,Place(..),Transition(..),Marking,tokens,buildMarking,
-     marked,lmarked,makeMarking,
+    (PetriNet,Place(..),Transition(..),Marking,buildVector,
+     value,elems,items,makeVector,FiringVector,
      renamePlace,renameTransition,renamePetriNetPlacesAndTransitions,
-     name,showNetName,places,transitions,initial,initialMarking,
-     pre,lpre,post,lpost,initials,context,ghostTransitions,
-     makePetriNet,makePetriNetWithTrans,makePetriNetWith,Trap)
+     name,showNetName,places,transitions,initialMarking,initial,initials,linitials,
+     pre,lpre,post,lpost,context,ghostTransitions,
+     makePetriNet,makePetriNetWithTrans,makePetriNetWith,Trap,Cut)
 where
 
 import qualified Data.Map as M
@@ -42,30 +42,34 @@ instance Nodes Place Transition where
 instance Nodes Transition Place where
         contextMap = adjacencyT
 
-newtype Marking = Marking { getMarking :: M.Map Place Integer }
+newtype Vector a = Vector { getVector :: M.Map a Integer }
 
-instance Show Marking where
-        show (Marking m) =
-                "[" ++ intercalate "," (map showPlaceMarking (M.toList m)) ++ "]"
-            where showPlaceMarking (n,i) =
-                    show n ++ (if i /= 1 then "(" ++ show i ++ ")" else "")
+type Marking = Vector Place
+type FiringVector = Vector Transition
 
-tokens :: Marking -> Place -> Integer
-tokens m p = M.findWithDefault 0 p (getMarking m)
+instance (Show a) => Show (Vector a) where
+        show (Vector v) =
+                "[" ++ intercalate "," (map showEntry (M.toList v)) ++ "]"
+            where showEntry (v,x) =
+                    show v ++ (if x /= 1 then "(" ++ show x ++ ")" else "")
 
-buildMarking :: [(Place, Integer)] -> Marking
-buildMarking = makeMarking . M.fromList
+value :: (Ord a) => Vector a -> a -> Integer
+value v x = M.findWithDefault 0 x (getVector v)
 
-makeMarking :: M.Map Place Integer -> Marking
-makeMarking = Marking . M.filter (/=0)
+elems :: (Ord a) => Vector a -> [a]
+elems = M.keys . getVector
 
-marked :: Marking -> [Place]
-marked = M.keys . getMarking
+items :: Vector a -> [(a,Integer)]
+items = M.toList . getVector
 
-lmarked :: Marking -> [(Place,Integer)]
-lmarked = M.toList . getMarking
+buildVector :: (Ord a) => [(a, Integer)] -> Vector a
+buildVector = makeVector . M.fromList
+
+makeVector :: (Ord a) => M.Map a Integer -> Vector a
+makeVector = Vector . M.filter (/=0)
 
 type Trap = [Place]
+type Cut = ([[Transition]], [Transition])
 
 data PetriNet = PetriNet {
         name :: String,
@@ -78,10 +82,13 @@ data PetriNet = PetriNet {
 }
 
 initial :: PetriNet -> Place -> Integer
-initial net = tokens (initialMarking net)
+initial net = value (initialMarking net)
 
-initials :: PetriNet -> [(Place,Integer)]
-initials net = M.toList (getMarking (initialMarking net))
+initials :: PetriNet -> [Place]
+initials = elems . initialMarking
+
+linitials :: PetriNet -> [(Place,Integer)]
+linitials = items . initialMarking
 
 showNetName :: PetriNet -> String
 showNetName net = "Petri net" ++
@@ -116,8 +123,8 @@ renamePetriNetPlacesAndTransitions f net =
                     adjacencyP net,
                 adjacencyT  = mapAdjacency (renameTransition f) (renamePlace f) $
                     adjacencyT net,
-                initialMarking = Marking $
-                    M.mapKeys (renamePlace f) $ getMarking $ initialMarking net,
+                initialMarking = Vector $
+                    M.mapKeys (renamePlace f) $ getVector $ initialMarking net,
                 ghostTransitions = map (renameTransition f) $ ghostTransitions net
             }
         where mapAdjacency f g m = M.mapKeys f (M.map (mapContext g) m)
@@ -135,7 +142,7 @@ makePetriNet name places transitions arcs initial gs =
                 transitions = map Transition transitions,
                 adjacencyP = adP,
                 adjacencyT = adT,
-                initialMarking = buildMarking (map (first Place) initial),
+                initialMarking = buildVector (map (first Place) initial),
                 ghostTransitions = map Transition gs
             }
         where
@@ -173,7 +180,7 @@ makePetriNetWith name places ts initial gs =
                 transitions = transitions,
                 adjacencyP = placeMap,
                 adjacencyT = M.fromList ts,
-                initialMarking = buildMarking initial,
+                initialMarking = buildVector initial,
                 ghostTransitions = gs
             }
 

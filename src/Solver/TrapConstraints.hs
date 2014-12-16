@@ -19,11 +19,11 @@ trapConstraints net b =
 
 trapInitiallyMarked :: PetriNet -> VarMap Place -> BoolConstraint
 trapInitiallyMarked net b =
-        liftM bOr $ mapM (val b) $ marked $ initialMarking net
+        liftM bOr $ mapM (val b) $ initials net
 
 trapUnassigned :: Marking -> VarMap Place -> BoolConstraint
 trapUnassigned m b =
-        liftM bAnd $ mapM (liftM bnot . val b) $ marked m
+        liftM bAnd $ mapM (liftM bnot . val b) $ elems m
 
 checkTrap :: PetriNet -> Marking -> VarMap Place -> BoolConstraint
 checkTrap net m b = do
@@ -42,6 +42,6 @@ checkTrapSat net m =
 
 trapFromAssignment :: VarMap Place -> BoolResult Trap
 trapFromAssignment b = do
-        ps <- vals b
-        return $ M.keys $ M.filter id ps
+        bm <- valMap b
+        return $ M.keys $ M.filter id bm
 

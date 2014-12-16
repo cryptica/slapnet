@@ -19,9 +19,7 @@ placeConstraints net m x =
                 outgoing <- mapM addTransition $ lpost net p
                 let pinit = literal $ initial net p
                 return $ pinit + sum incoming - sum outgoing .== mp
-              addTransition (t,w) = do
-                  xt <- val x t
-                  return $ literal w * xt
+              addTransition (t,w) = liftM (literal w *) (val x t)
 
 nonNegativityConstraints :: PetriNet -> VarMap Place -> VarMap Transition ->
         IntConstraint
@@ -63,5 +61,5 @@ checkStateEquationSat net f traps =
 
 markingFromAssignment :: VarMap Place -> IntResult Marking
 markingFromAssignment m =
-        liftM makeMarking (vals m)
+        liftM makeVector $ valMap m
 

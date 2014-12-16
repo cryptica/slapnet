@@ -29,7 +29,7 @@ import Structure
 import Solver
 import Solver.StateEquation
 import Solver.TrapConstraints
---import Solver.TransitionInvariant
+import Solver.TransitionInvariant
 --import Solver.LivenessInvariant
 --import Solver.SComponent
 --import Solver.CommFreeReachability
@@ -343,7 +343,7 @@ transformNet (net, props) TerminationByReachability =
             ps = [sigma, m1, m2] ++
                  places net ++ map primePlace (places net)
             is = [(Place "'m1", 1)] ++
-                 initials net ++ map (first primePlace) (initials net)
+                 linitials net ++ map (first primePlace) (linitials net)
             transformTransition t =
                 let (preT, postT) = context net t
                     pre'  = [(m1,1)] ++ preT  ++ map (first primePlace) preT
@@ -420,7 +420,7 @@ checkProperty verbosity net refine invariant p = do
         verbosePut verbosity 3 $ show p
         r <- case pcont p of
             (Safety pf) -> checkSafetyProperty verbosity net refine invariant pf
-            --(Liveness pf) -> checkLivenessProperty verbosity net refine invariant pf
+            (Liveness pf) -> checkLivenessProperty verbosity net refine invariant pf
             --(Structural ps) -> checkStructuralProperty verbosity net ps
         verbosePut verbosity 0 $ showPropertyName p ++ " " ++
             case r of
@@ -473,16 +473,17 @@ checkSafetyPropertyBySafetyRef verbosity net refine f traps = do
                                                 refine f (trap:traps)
                 else
                     return Unknown
-{-
+
 checkLivenessProperty :: Int -> PetriNet -> Bool -> Bool ->
-        Formula -> IO PropResult
+        Formula Transition -> IO PropResult
 checkLivenessProperty verbosity net refine invariant f = do
         (r, comps) <- checkLivenessPropertyByRef verbosity net refine f []
-        if r == Satisfied && invariant then
-            generateLivenessInvariant verbosity net f comps
-        else
-            return r
-
+        return r
+        --if r == Satisfied && invariant then
+        --    generateLivenessInvariant verbosity net f comps
+        --else
+        --    return r
+{-
 generateLivenessInvariant :: Int -> PetriNet ->
         Formula -> [SCompCut] -> IO PropResult
 generateLivenessInvariant verbosity net f comps = do
@@ -495,35 +496,25 @@ generateLivenessInvariant verbosity net f comps = do
                 let inv = getLivenessInvariant net cuts as
                 mapM_ print inv
                 return Satisfied
-
+-}
 checkLivenessPropertyByRef :: Int -> PetriNet -> Bool ->
-        Formula -> [SCompCut] -> IO (PropResult, [SCompCut])
-checkLivenessPropertyByRef verbosity net refine f comps = do
-        r <- checkSat $ checkTransitionInvariantSat net f comps
+        Formula Transition -> [Cut] -> IO (PropResult, [Cut])
+checkLivenessPropertyByRef verbosity net refine f cuts = do
+        r <- checkSat verbosity $ checkTransitionInvariantSat net f cuts
         case r of
-            Nothing -> return (Satisfied, comps)
-            Just ax -> do
-                let fired = firedTransitionsFromAssignment ax
-                verbosePut verbosity 1 "Assignment found"
-                verbosePut verbosity 2 $ "Transitions fired: " ++ show fired
-                verbosePut verbosity 3 $ "Assignment: " ++ show ax
+            Nothing -> return (Satisfied, cuts)
+            Just x -> do
                 if refine then do
-                    rt <- checkSat $ checkSComponentSat net fired ax
+                    rt <- return Nothing -- checkSat $ checkSComponentSat net x
                     case rt of
                         Nothing -> do
-                            verbosePut verbosity 1 "No S-component found"
-                            return (Unknown, comps)
-                        Just as -> do
-                            let sCompsCut = getSComponentCompsCut net ax as
-                            verbosePut verbosity 1 "S-component found"
-                            verbosePut verbosity 2 $ "Comps/Cut: " ++ show sCompsCut
-                            verbosePut verbosity 3 $ "S-Component assignment: " ++
-                                                      show as
+                            return (Unknown, cuts)
+                        Just cut -> do
                             checkLivenessPropertyByRef verbosity net refine f
-                                                  (sCompsCut:comps)
+                                                  (cut:cuts)
                 else
-                    return (Unknown, comps)
--}
+                    return (Unknown, cuts)
+
 checkStructuralProperty :: Int -> PetriNet -> Structure -> IO PropResult
 checkStructuralProperty _ net struct =
         if checkStructure net struct then

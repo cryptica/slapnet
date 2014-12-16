@@ -18,7 +18,7 @@ renderNet net =
             ps = "PLACE " <> intercalate ","
                     (map renderPlace (places net)) <> ";\n"
             is = "MARKING " <> intercalate ","
-                    (map showWeight (initials net)) <> ";\n"
+                    (map showWeight (linitials net)) <> ";\n"
             makeTransition t =
                 let (preT,postT) = context net t
                     preS = "CONSUME " <> intercalate ","

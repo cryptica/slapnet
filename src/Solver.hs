@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
 
 module Solver
-    (prime,checkSat,ModelReader,val,vals,VarMap,
+    (prime,checkSat,ModelReader,val,vals,valMap,VarMap,
      getNames,makeVarMap,makeVarMapWith,
      IntConstraint,BoolConstraint,IntResult,BoolResult,
      Model,ConstraintProblem)
@@ -34,10 +34,15 @@ val ma x = do
         mb <- ask
         return $ mb M.! (ma M.! x)
 
-vals :: (Ord a) => VarMap a -> ModelReader b (M.Map a b)
+valMap :: (Ord a) => VarMap a -> ModelReader b (M.Map a b)
+valMap ma = do
+        mb <- ask
+        return $ M.map (mb M.!) ma
+
+vals :: (Ord a) => VarMap a -> ModelReader b [b]
 vals ma = do
         mb <- ask
-        return $ fmap (mb M.!) ma
+        return $ M.elems $ M.map (mb M.!) ma
 
 makeVarMap :: (Show a, Ord a) => [a] -> VarMap a
 makeVarMap = makeVarMapWith id
