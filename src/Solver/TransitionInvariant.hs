@@ -8,7 +8,6 @@ import Control.Monad
 import PetriNet
 import Property
 import Solver
---import Solver.SComponent
 import Solver.Formula
 
 tInvariantConstraints :: PetriNet -> VarMap Transition -> IntConstraint
@@ -29,24 +28,26 @@ nonnegativityConstraints :: VarMap Transition -> IntConstraint
 nonnegativityConstraints x = do
         xs <- vals x
         return $ bAnd $ map (.>= 0) xs
-{-
-checkSComponentTransitions :: [Cut] -> VarMap Transition -> IntConstraint
-checkSComponentTransitions cuts x =
-            bAnd $ map (bOr . map checkCompsCut) comps
-        where checkCompsCut (ts,w) =
-              -- TODO: check how changing the representation changes result
-                let tc t = mVal m t .> 0
-                in  if w then bnot (bOr (map tc ts)) else bOr (map tc ts)
--}
+
+-- TODO: check how changing the representation changes result
+checkCuts :: [Cut] -> VarMap Transition -> IntConstraint
+checkCuts cuts x =
+            liftM bAnd $ mapM checkCut cuts
+        where checkCut (ts, u) = do
+                cPre <- mapM (liftM (bnot . bOr) . mapM positive) ts
+                cPost <- mapM positive u
+                return $ bOr cPre ||| bOr cPost
+              positive t = liftM (.> 0) (val x t)
+
 checkTransitionInvariant :: PetriNet -> Formula Transition ->
         [Cut] -> VarMap Transition -> IntConstraint
 checkTransitionInvariant net f cuts x = do
         c1 <- tInvariantConstraints net x
         c2 <- nonnegativityConstraints x
         c3 <- finalInvariantConstraints x
-        --c4 <- checkSComponentTransitions cuts x
+        c4 <- checkCuts cuts x
         c5 <- evaluateFormula f x
-        return $ c1 &&& c2 &&& c3 &&& c3 &&& c5
+        return $ c1 &&& c2 &&& c3 &&& c4 &&& c5
 
 checkTransitionInvariantSat :: PetriNet -> Formula Transition -> [Cut] ->
         ConstraintProblem Integer FiringVector
