@@ -1,6 +1,5 @@
 module Solver.StateEquation
-    (checkStateEquation,checkStateEquationSat,
-     markedPlacesFromAssignment,Trap)
+    (checkStateEquationSat)
 where
 
 import Data.SBV
@@ -10,8 +9,6 @@ import PetriNet
 import Property
 import Solver
 import Solver.Formula
-
-type Trap = [Place]
 
 placeConstraints :: PetriNet -> VarMap Place -> VarMap Transition -> IntConstraint
 placeConstraints net m x =
@@ -55,16 +52,16 @@ checkStateEquation net f m x traps = do
         return $ c1 &&& c2 &&& c3 &&& c4
 
 checkStateEquationSat :: PetriNet -> Formula Place -> [Trap] ->
-        ([String], IntConstraint, IntResult Trap)
+        ConstraintProblem Integer Marking
 checkStateEquationSat net f traps =
         let m = makeVarMap $ places net
             x = makeVarMap $ transitions net
-        in  (getNames m ++ getNames x,
+        in  ("state equation", "marking",
+             getNames m ++ getNames x,
              checkStateEquation net f m x traps,
-             markedPlacesFromAssignment net m)
+             markingFromAssignment m)
 
-markedPlacesFromAssignment :: PetriNet ->
-        VarMap Place -> IntResult [Place]
-markedPlacesFromAssignment net m =
-        filterM (liftM (> 0) . val m) $ places net
+markingFromAssignment :: VarMap Place -> IntResult Marking
+markingFromAssignment m =
+        liftM makeMarking (vals m)
 

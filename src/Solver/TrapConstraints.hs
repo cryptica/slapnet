@@ -1,38 +1,47 @@
 module Solver.TrapConstraints
-    (checkTrap,checkTrapSat,
-     trapFromAssignment
-    )
+    (checkTrapSat)
 where
 
 import Data.SBV
+import Control.Monad
+import qualified Data.Map as M
 
 import PetriNet
 import Solver
 
-trapConstraints :: PetriNet -> ModelSB -> SBool
-trapConstraints net m =
-            bAnd $ map trapConstraint $ transitions net
-        where trapConstraint t =
-                bOr (map (mElem m) $ pre net t) ==> bOr (map (mElem m) $ post net t)
+trapConstraints :: PetriNet -> VarMap Place -> BoolConstraint
+trapConstraints net b =
+            liftM bAnd $ mapM trapConstraint $ transitions net
+        where trapConstraint t = do
+                cPre <- mapM (val b) $ pre net t
+                cPost <- mapM (val b) $ post net t
+                return $ bOr cPre ==> bOr cPost
 
-trapInitiallyMarked :: PetriNet -> ModelSB -> SBool
-trapInitiallyMarked net m =
-        let marked = map fst $ filter (( > 0) . snd) $ initials net
-        in  bOr $ map (mElem m) marked
+trapInitiallyMarked :: PetriNet -> VarMap Place -> BoolConstraint
+trapInitiallyMarked net b =
+        liftM bOr $ mapM (val b) $ marked $ initialMarking net
 
-trapUnassigned :: [String] -> ModelSB -> SBool
-trapUnassigned assigned m = bAnd $ map (mNotElem m) assigned
+trapUnassigned :: Marking -> VarMap Place -> BoolConstraint
+trapUnassigned m b =
+        liftM bAnd $ mapM (liftM bnot . val b) $ marked m
 
-checkTrap :: PetriNet -> [String] -> ModelSB -> SBool
-checkTrap net assigned m =
-        trapConstraints net m &&&
-        trapInitiallyMarked net m &&&
-        trapUnassigned assigned m
+checkTrap :: PetriNet -> Marking -> VarMap Place -> BoolConstraint
+checkTrap net m b = do
+        c1 <- trapConstraints net b
+        c2 <- trapInitiallyMarked net b
+        c3 <- trapUnassigned m b
+        return $ c1 &&& c2 &&& c3
 
-checkTrapSat :: PetriNet -> [String] -> ([String], ModelSB -> SBool)
-checkTrapSat net assigned =
-        (places net, checkTrap net assigned)
+checkTrapSat :: PetriNet -> Marking -> ConstraintProblem Bool Trap
+checkTrapSat net m =
+        let b = makeVarMap $ places net
+        in  ("trap constraints", "trap",
+             getNames b,
+             checkTrap net m b,
+             trapFromAssignment b)
 
-trapFromAssignment :: ModelB -> [String]
-trapFromAssignment = mElemsWith id
+trapFromAssignment :: VarMap Place -> BoolResult Trap
+trapFromAssignment b = do
+        ps <- vals b
+        return $ M.keys $ M.filter id ps
 

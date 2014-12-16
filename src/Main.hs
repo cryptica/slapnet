@@ -12,6 +12,7 @@ import Control.Arrow (first)
 import Data.List (partition)
 import qualified Data.ByteString.Lazy as L
 
+import Util
 import Parser
 import qualified Parser.PNET as PNET
 import qualified Parser.LOLA as LOLA
@@ -27,7 +28,7 @@ import Property
 import Structure
 import Solver
 import Solver.StateEquation
---import Solver.TrapConstraints
+import Solver.TrapConstraints
 --import Solver.TransitionInvariant
 --import Solver.LivenessInvariant
 --import Solver.SComponent
@@ -243,10 +244,6 @@ options =
         "Show help"
         ]
 
-verbosePut :: Int -> Int -> String -> IO ()
-verbosePut verbosity level str =
-        when (verbosity >= level) (putStrLn str)
-
 parseArgs :: IO (Either String (Options, [String]))
 parseArgs = do
         args <- getArgs
@@ -461,26 +458,19 @@ checkSafetyPropertyByCommFree verbosity net f = do
 checkSafetyPropertyBySafetyRef :: Int -> PetriNet -> Bool ->
         Formula Place -> [Trap] -> IO PropResult
 checkSafetyPropertyBySafetyRef verbosity net refine f traps = do
-        r <- checkSat $ checkStateEquationSat net f traps
+        r <- checkSat verbosity $ checkStateEquationSat net f traps
         case r of
             Nothing -> return Satisfied
-            Just assigned -> do
-                verbosePut verbosity 1 "Assignment found"
-                verbosePut verbosity 2 $ "Places marked: " ++ show assigned
+            Just marking -> do
                 if refine then do
-                    rt <- return Nothing -- checkSat $ checkTrapSat net assigned
+                    rt <- checkSat verbosity $ checkTrapSat net marking
                     case rt of
                         Nothing -> do
                             verbosePut verbosity 1 "No trap found."
                             return Unknown
                         Just trap -> do
-                            -- let trap = trapFromAssignment at
-                            verbosePut verbosity 1 "Trap found"
-                            --verbosePut verbosity 2 $ "Places in trap: " ++
-                            --                          show trap
-                            return Unknown
-                            --checkSafetyPropertyBySafetyRef verbosity net
-                            --                    refine f (trap:traps)
+                            checkSafetyPropertyBySafetyRef verbosity net
+                                                refine f (trap:traps)
                 else
                     return Unknown
 {-
