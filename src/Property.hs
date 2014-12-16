@@ -3,11 +3,10 @@
 module Property
     (Property(..),
      showPropertyName,
-     rename,
+     renameProperty,
      PropertyType(..),
      PropertyContent(..),
      Formula(..),
-     LinearInequation(..),
      Op(..),
      Term(..),
      PropResult(..),
@@ -18,31 +17,33 @@ module Property
      resultsOr)
 where
 
+import PetriNet
 import Structure
 
-data Term = Var String
-          | Const Integer
-          | Minus Term
-          | Term :+: Term
-          | Term :-: Term
-          | Term :*: Term
-          deriving (Eq)
+data Term a =
+          Var a
+        | Const Integer
+        | Minus (Term a)
+        | Term a :+: Term a
+        | Term a :-: Term a
+        | Term a :*: Term a
+        deriving (Eq)
 
-instance Show Term where
-        show (Var x) = x
+instance (Show a) => Show (Term a) where
+        show (Var x) = show x
         show (Const c) = show c
         show (Minus t) = "-" ++ show t
         show (t :+: u) = "(" ++ show t ++ " + " ++ show u ++ ")"
         show (t :-: u) = "(" ++ show t ++ " - " ++ show u ++ ")"
         show (t :*: u) = show t ++ " * " ++ show u
 
-renameTerm :: (String -> String) -> Term -> Term
-renameTerm f (Var x) = Var (f x)
-renameTerm _ (Const c) = Const c
-renameTerm f (Minus t) = Minus (renameTerm f t)
-renameTerm f (t :+: u) = renameTerm f t :+: renameTerm f u
-renameTerm f (t :-: u) = renameTerm f t :-: renameTerm f u
-renameTerm f (t :*: u) = renameTerm f t :*: renameTerm f u
+instance Functor Term where
+        fmap f (Var x) = Var (f x)
+        fmap _ (Const c) = Const c
+        fmap f (Minus t) = Minus (fmap f t)
+        fmap f (t :+: u) = fmap f t :+: fmap f u
+        fmap f (t :-: u) = fmap f t :-: fmap f u
+        fmap f (t :*: u) = fmap f t :*: fmap f u
 
 data Op = Gt | Ge | Eq | Ne | Le | Lt deriving (Eq)
 
@@ -54,41 +55,34 @@ instance Show Op where
         show Le = "≤"
         show Lt = "<"
 
--- TODO: merge LinIneq constructor into Formula
-data LinearInequation = LinIneq Term Op Term deriving (Eq)
-
-instance Show LinearInequation where
-        show (LinIneq lhs op rhs) = show lhs ++ " " ++ show op ++ " " ++ show rhs
-
-renameLinIneq :: (String -> String) -> LinearInequation -> LinearInequation
-renameLinIneq f (LinIneq lhs op rhs) =
-        LinIneq (renameTerm f lhs) op (renameTerm f rhs)
-
-data Formula = FTrue | FFalse
-             | Atom LinearInequation
-             | Neg Formula
-             | Formula :&: Formula
-             | Formula :|: Formula
+data Formula a =
+          FTrue | FFalse
+        | LinearInequation (Term a) Op (Term a)
+        | Neg (Formula a)
+        | Formula a :&: Formula a
+        | Formula a :|: Formula a
              deriving (Eq)
 
 infixr 3 :&:
 infixr 2 :|:
 
-instance Show Formula where
+instance (Show a) => Show (Formula a) where
         show FTrue = "true"
         show FFalse = "false"
-        show (Atom a) = show a
+        show (LinearInequation lhs op rhs) =
+            show lhs ++ " " ++ show op ++ " " ++ show rhs
         show (Neg p) = "¬" ++ "(" ++ show p ++ ")"
         show (p :&: q) = "(" ++ show p ++ " ∧ " ++ show q ++ ")"
         show (p :|: q) = "(" ++ show p ++ " ∨ " ++ show q ++ ")"
 
-renameFormula :: (String -> String) -> Formula -> Formula
-renameFormula _ FTrue = FTrue
-renameFormula _ FFalse = FFalse
-renameFormula f (Atom a) = Atom (renameLinIneq f a)
-renameFormula f (Neg p) = Neg (renameFormula f p)
-renameFormula f (p :&: q) = renameFormula f p :&: renameFormula f q
-renameFormula f (p :|: q) = renameFormula f p :|: renameFormula f q
+instance Functor Formula where
+        fmap _ FTrue = FTrue
+        fmap _ FFalse = FFalse
+        fmap f (LinearInequation lhs op rhs) =
+                LinearInequation (fmap f lhs) op (fmap f rhs)
+        fmap f (Neg p) = Neg (fmap f p)
+        fmap f (p :&: q) = fmap f p :&: fmap f q
+        fmap f (p :|: q) = fmap f p :|: fmap f q
 
 -- TODO: add functions to transform formula to CNF/DNF
 
@@ -96,8 +90,8 @@ data PropertyType = SafetyType
                   | LivenessType
                   | StructuralType
 
-data PropertyContent = Safety Formula
-                  | Liveness Formula
+data PropertyContent = Safety (Formula Place)
+                  | Liveness (Formula Transition)
                   | Structural Structure
 
 showPropertyType :: PropertyContent -> String
@@ -120,10 +114,12 @@ instance Show Property where
             showPropertyName p ++
             " { " ++ showPropertyContent (pcont p) ++ " }"
 
-rename :: (String -> String) -> Property -> Property
-rename f (Property pn (Safety pf)) = Property pn (Safety (renameFormula f pf))
-rename f (Property pn (Liveness pf)) = Property pn (Liveness (renameFormula f pf))
-rename _ (Property pn (Structural pc)) = Property pn (Structural pc)
+renameProperty :: (String -> String) -> Property -> Property
+renameProperty f (Property pn (Safety pf)) =
+        Property pn (Safety (fmap (renamePlace f) pf))
+renameProperty f (Property pn (Liveness pf)) =
+        Property pn (Liveness (fmap (renameTransition f) pf))
+renameProperty _ (Property pn (Structural pc)) = Property pn (Structural pc)
 
 showPropertyName :: Property -> String
 showPropertyName p = showPropertyType (pcont p) ++ " property" ++

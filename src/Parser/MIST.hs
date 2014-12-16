@@ -12,7 +12,7 @@ import Text.Parsec.Language (LanguageDef, emptyDef)
 import qualified Text.Parsec.Token as Token
 
 import Parser
-import PetriNet (PetriNet,makePetriNetWithTrans)
+import PetriNet (PetriNet,makePetriNetWithTrans,Place(..))
 import Property
 
 languageDef :: LanguageDef ()
@@ -68,12 +68,12 @@ prop = do
         return $ Property "" $ Safety $
                     foldl1 (:|:) $ map (foldl1 (:&:)) ineqs
 
-ineq :: Parser Formula
+ineq :: Parser (Formula Place)
 ineq = do
         x <- identifier
         reservedOp ">="
         c <- integer
-        return $ Atom $ LinIneq (Var x) Ge (Const c)
+        return $ LinearInequation (Var (Place x)) Ge (Const c)
 
 transitions :: Parser [(String, [(String, Integer)], [(String, Integer)])]
 transitions = do

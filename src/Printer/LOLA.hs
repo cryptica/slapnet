@@ -32,8 +32,8 @@ renderNet net =
 printNet :: PetriNet -> L.ByteString
 printNet = toLazyByteString . renderNet
 
-renderTerm :: Term -> Builder
-renderTerm (Var x) = stringUtf8 x
+renderTerm :: (Show a) => Term a -> Builder
+renderTerm (Var x) = stringUtf8 $ show x
 renderTerm (Const c) = integerDec c
 renderTerm (Minus t) = "-" <> renderTerm t
 renderTerm (t :+: u) = "(" <> renderTerm t <> " + " <> renderTerm u <> ")"
@@ -48,15 +48,12 @@ renderOp Ne = " != "
 renderOp Le = " <= "
 renderOp Lt = " < "
 
-renderLinIneq :: LinearInequation -> Builder
-renderLinIneq (LinIneq lhs op rhs) =
-        renderTerm lhs <> renderOp op <> renderTerm rhs
-
 -- TODO: reduce parantheses in built formula
-renderFormula :: Formula -> Builder
+renderFormula :: (Show a) => Formula a -> Builder
 renderFormula FTrue = "TRUE"
 renderFormula FFalse = "FALSE"
-renderFormula (Atom a) = renderLinIneq a
+renderFormula (LinearInequation lhs op rhs) =
+        renderTerm lhs <> renderOp op <> renderTerm rhs
 renderFormula (Neg p) = "NOT " <> "(" <> renderFormula p <> ")"
 renderFormula (p :&: q) = renderFormula p <> " AND " <> renderFormula q
 renderFormula (p :|: q) = "(" <> renderFormula p <> " OR " <> renderFormula q <> ")"

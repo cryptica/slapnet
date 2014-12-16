@@ -12,16 +12,16 @@ import Printer
 import PetriNet
 import Property
 
-renderSimpleTerm :: Integer -> Term -> Builder
-renderSimpleTerm fac (Var x) = if fac == 1 then stringUtf8 x
-                               else integerDec fac <> stringUtf8 x
+renderSimpleTerm :: Integer -> Term Place -> Builder
+renderSimpleTerm fac (Var x) = if fac == 1 then renderPlace x
+                               else integerDec fac <> renderPlace x
 renderSimpleTerm fac (Const c) = integerDec (fac*c)
 renderSimpleTerm fac (Const c :*: t) = renderSimpleTerm (fac*c) t
 renderSimpleTerm fac (t :*: Const c) = renderSimpleTerm (fac*c) t
 renderSimpleTerm fac (Minus t) = renderSimpleTerm (-fac) t
 renderSimpleTerm _ t = error $ "term not supported for sara: " <> show t
 
-renderTerm :: Term -> Builder
+renderTerm :: Term Place -> Builder
 renderTerm (t :+: u) = renderTerm t <> "+" <> renderSimpleTerm 1 u
 renderTerm (t :-: u) = renderTerm t <> "+" <> renderSimpleTerm (-1) u
 renderTerm t = renderSimpleTerm 1 t
@@ -32,20 +32,19 @@ renderOp Eq = ":"
 renderOp Le = "<"
 renderOp op = error $ "operand not supported for sara: " <> show op
 
-renderLinIneq :: LinearInequation -> Builder
-renderLinIneq (LinIneq lhs op (Const c)) =
+renderConjunction :: Formula Place -> Builder
+renderConjunction (LinearInequation lhs op (Const c)) =
         renderTerm lhs <> renderOp op <> integerDec c
-renderLinIneq l = error $ "linear inequation not supported for sara: " <> show l
-
-renderConjunction :: Formula -> Builder
-renderConjunction (Atom a) = renderLinIneq a
+renderConjunction f@(LinearInequation {}) =
+        error $ "linear inequation not supported for sara: " <> show f
 renderConjunction (Neg _) = error "negation not supported for sara"
 renderConjunction (FTrue :&: p) = renderConjunction p
 renderConjunction (p :&: FTrue) = renderConjunction p
 renderConjunction (p :&: q) = renderConjunction p <> ", " <> renderConjunction q
 renderConjunction f = error $ "formula not supported for sara: " <> show f
 
-renderDisjunction :: String -> String -> PetriNet -> Formula -> Builder
+renderDisjunction :: String -> String -> PetriNet ->
+        Formula Place -> Builder
 renderDisjunction propname filename net (FFalse :|: p) =
         renderDisjunction propname filename net p
 renderDisjunction propname filename net (p :|: FFalse) =
@@ -64,7 +63,7 @@ renderDisjunction propname filename net f =
         "FINAL COVER;\n" <>
         "CONSTRAINTS " <> renderConjunction f <> ";"
 
-renderFormula :: String -> String -> PetriNet -> Formula -> Builder
+renderFormula :: String -> String -> PetriNet -> Formula Place -> Builder
 renderFormula = renderDisjunction
 
 renderProperty :: String -> PetriNet -> Property -> Builder

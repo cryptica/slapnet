@@ -48,20 +48,20 @@ binary name fun = Infix  ( reservedOp name *> return fun )
 prefix :: String -> (a -> a) -> Operator String () Identity a
 prefix name fun = Prefix ( reservedOp name *> return fun )
 
-termOperatorTable :: [[Operator String () Identity Term]]
+termOperatorTable :: [[Operator String () Identity (Term String)]]
 termOperatorTable =
         [ [ prefix "-" Minus ]
         , [ binary "*" (:*:) AssocLeft ]
         , [ binary "+" (:+:) AssocLeft, binary "-" (:-:) AssocLeft ]
         ]
 
-termAtom :: Parser Term
+termAtom :: Parser (Term String)
 termAtom =  (Var <$> identifier)
         <|> (Const <$> integer)
         <|> parens term
         <?> "basic term"
 
-term :: Parser Term
+term :: Parser (Term String)
 term = buildExpressionParser termOperatorTable termAtom <?> "term"
 
 parseOp :: Parser Op
@@ -72,36 +72,36 @@ parseOp = (reservedOp "<" *> return Lt) <|>
           (reservedOp ">" *> return Gt) <|>
           (reservedOp ">=" *> return Ge)
 
-linIneq :: Parser Formula
+linIneq :: Parser (Formula String)
 linIneq = do
         lhs <- term
         op <- parseOp
         rhs <- term
-        return (Atom (LinIneq lhs op rhs))
+        return (LinearInequation lhs op rhs)
 
 binaryName :: String -> (a -> a -> a) -> Assoc -> Operator String () Identity a
 binaryName name fun = Infix  ( reserved name *> return fun )
 prefixName :: String -> (a -> a) -> Operator String () Identity a
 prefixName name fun = Prefix ( reserved name *> return fun )
 
-formOperatorTable :: [[Operator String () Identity Formula]]
+formOperatorTable :: [[Operator String () Identity (Formula String)]]
 formOperatorTable =
         [ [ prefixName "NOT" Neg ]
         , [ binaryName "AND" (:&:) AssocRight ]
         , [ binaryName "OR"  (:|:) AssocRight ]
         ]
 
-formAtom :: Parser Formula
+formAtom :: Parser (Formula String)
 formAtom =  try linIneq
         <|> (reserved "TRUE" *> return FTrue)
         <|> (reserved "FALSE" *> return FFalse)
         <|> parens formula
         <?> "basic formula"
 
-formula :: Parser Formula
+formula :: Parser (Formula String)
 formula = buildExpressionParser formOperatorTable formAtom <?> "formula"
 
-parseFormula :: Parser Formula
+parseFormula :: Parser (Formula String)
 parseFormula = do
         whiteSpace
         reserved "FORMULA"

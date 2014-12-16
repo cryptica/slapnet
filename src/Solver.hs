@@ -1,22 +1,45 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
 
 module Solver
-    (prime,checkSat,ModelSI,ModelSB,ModelI,ModelB,
+    (prime,checkSat,ModelReader,val,VarMap,
+     getNames,makeVarMap,makeVarMapWith,varMapNames,
+     IntConstraint,BoolConstraint,IntResult,BoolResult,
      Model(..),mVal,mValues,mElemsWith,mElemSum,SModel(..),CModel(..))
 where
 
 import Data.SBV
 import qualified Data.Map as M
+import Control.Monad.Reader
+import Control.Applicative
 
 newtype Model a = Model { getMap :: M.Map String a }
+newtype VarMap a = VarMap { getVarMap :: M.Map a String }
+
+getNames :: VarMap a -> [String]
+getNames = M.elems . getVarMap
 
 instance Show a => Show (Model a) where
         show = show . M.toList . getMap
 
-type ModelSI = Model SInteger
-type ModelSB = Model SBool
-type ModelI = Model Integer
-type ModelB = Model Bool
+type ModelReader a b = Reader (Model a) b
+type IntConstraint = ModelReader SInteger SBool
+type BoolConstraint = ModelReader SBool SBool
+type IntResult a = ModelReader Integer a
+type BoolResult a = ModelReader Bool a
+
+val :: (Ord a) => VarMap a -> a -> ModelReader b b
+val ma x = do
+        mb <- ask
+        return $ getMap mb M.! (getVarMap ma M.! x)
+
+makeVarMap :: (Show a, Ord a) => [a] -> VarMap a
+makeVarMap = makeVarMapWith id
+
+makeVarMapWith :: (Show a, Ord a) => (String -> String) -> [a] -> VarMap a
+makeVarMapWith f xs = VarMap $ M.fromList $ xs `zip` map (f . show) xs
+
+varMapNames :: VarMap a -> [String]
+varMapNames = M.elems . getVarMap
 
 prime :: String -> String
 prime = ('\'':)
@@ -55,11 +78,11 @@ instance CModel Bool where
         cElem = mVal
         cNotElem m x = not $ mVal m x
 
-symConstraints :: SymWord a => [String] -> (Model (SBV a) -> SBool) ->
+symConstraints :: SymWord a => [String] -> ModelReader (SBV a) SBool ->
         Symbolic SBool
 symConstraints vars constraint = do
         syms <- mapM exists vars
-        return $ constraint $ Model $ M.fromList $ vars `zip` syms
+        return $ runReader constraint $ Model $ M.fromList $ vars `zip` syms
 
 rebuildModel :: SymWord a => [String] -> Either String (Bool, [a]) ->
         Maybe (Model a)
@@ -68,8 +91,9 @@ rebuildModel _ (Right (True, _)) = error "Prover returned unknown"
 rebuildModel vars (Right (False, m)) = Just $ Model $ M.fromList $ vars `zip` m
 
 checkSat :: (SatModel a, SymWord a) =>
-        ([String], Model (SBV a) -> SBool) ->
-        IO (Maybe (Model a))
-checkSat (vars, constraint) = do
+        ([String], ModelReader (SBV a) SBool, ModelReader a b) ->
+        IO (Maybe b)
+checkSat (vars, constraint, interpretation) = do
         result <- satWith z3{verbose=False} $ symConstraints vars constraint
-        return $ rebuildModel vars $ getModel result
+        return $ runReader interpretation <$> rebuildModel vars (getModel result)
+

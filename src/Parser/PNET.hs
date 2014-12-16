@@ -10,7 +10,7 @@ import Text.Parsec.Language (LanguageDef, emptyDef)
 import qualified Text.Parsec.Token as Token
 
 import Parser
-import PetriNet (PetriNet,makePetriNet)
+import PetriNet (PetriNet,makePetriNet,Place(..),Transition(..))
 import Property
 
 languageDef :: LanguageDef ()
@@ -129,20 +129,20 @@ binary name fun = Infix  ( reservedOp name *> return fun )
 prefix :: String -> (a -> a) -> Operator String () Identity a
 prefix name fun = Prefix ( reservedOp name *> return fun )
 
-termOperatorTable :: [[Operator String () Identity Term]]
+termOperatorTable :: [[Operator String () Identity (Term String)]]
 termOperatorTable =
         [ [ prefix "-" Minus ]
         , [ binary "*" (:*:) AssocLeft ]
         , [ binary "+" (:+:) AssocLeft, binary "-" (:-:) AssocLeft ]
         ]
 
-termAtom :: Parser Term
+termAtom :: Parser (Term String)
 termAtom =  (Var <$> ident)
         <|> (Const <$> integer)
         <|> parens term
         <?> "basic term"
 
-term :: Parser Term
+term :: Parser (Term String)
 term = buildExpressionParser termOperatorTable termAtom <?> "term"
 
 parseOp :: Parser Op
@@ -153,28 +153,28 @@ parseOp = (reservedOp "<" *> return Lt) <|>
           (reservedOp ">" *> return Gt) <|>
           (reservedOp ">=" *> return Ge)
 
-linIneq :: Parser Formula
+linIneq :: Parser (Formula String)
 linIneq = do
         lhs <- term
         op <- parseOp
         rhs <- term
-        return (Atom (LinIneq lhs op rhs))
+        return (LinearInequation lhs op rhs)
 
-formOperatorTable :: [[Operator String () Identity Formula]]
+formOperatorTable :: [[Operator String () Identity (Formula String)]]
 formOperatorTable =
         [ [ prefix "!" Neg ]
         , [ binary "&&" (:&:) AssocRight ]
         , [ binary "||" (:|:) AssocRight ]
         ]
 
-formAtom :: Parser Formula
+formAtom :: Parser (Formula String)
 formAtom =  try linIneq
         <|> (reserved "true" *> return FTrue)
         <|> (reserved "false" *> return FFalse)
         <|> parens formula
         <?> "basic formula"
 
-formula :: Parser Formula
+formula :: Parser (Formula String)
 formula = buildExpressionParser formOperatorTable formAtom <?> "formula"
 
 propertyType :: Parser PropertyType
@@ -192,10 +192,11 @@ property = do
         case pt of
             SafetyType -> do
                 form <- braces formula
-                return Property { pname=name, pcont=Safety form }
+                return Property
+                    { pname=name, pcont=Safety (fmap Place form) }
             LivenessType -> do
                 form <- braces formula
-                return Property { pname=name, pcont=Liveness form }
+                return Property { pname=name, pcont=Liveness (fmap Transition form) }
             StructuralType -> error "structural property not supported for pnet"
 
 parseContent :: Parser (PetriNet,[Property])

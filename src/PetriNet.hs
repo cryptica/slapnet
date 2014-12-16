@@ -2,10 +2,11 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 module PetriNet
-    (PetriNet,Place,Transition,Marking,tokens,buildMarking,
+    (PetriNet,Place(..),Transition(..),Marking,tokens,buildMarking,
+     renamePlace,renameTransition,renamePetriNetPlacesAndTransitions,
      name,showNetName,places,transitions,initial,initialMarking,
      pre,lpre,post,lpost,initials,context,ghostTransitions,
-     makePetriNet,makePetriNetWithTrans)
+     makePetriNet,makePetriNetWithTrans,makePetriNetWith)
 where
 
 import qualified Data.Map as M
@@ -85,21 +86,28 @@ instance Show PetriNet where
                 where showContext (s,(l,r)) =
                           show l ++ " -> " ++ show s ++ " -> " ++ show r
 
---makePetriNet :: String -> [Place] -> [Transition] ->
---        [(Place, ([(Transition, Integer)], [(Transition, Integer)]))] ->
---        [(Transition, ([(Place, Integer)], [(Place, Integer)]))] ->
---        [(Place, Integer)] -> [Transition] -> PetriNet
---makePetriNet name places transitions placeArcs transitionArcs initial gs =
---            PetriNet { name=name, places=places, transitions=transitions,
---                       adjacencyP=M.fromList (adjacencyFilter placeArcs),
---                       adjacencyT=M.fromList (adjacencyFilter transitionArcs),
---                       initialMarking=buildMarking initial,
---                       ghostTransitions=gs }
---        where
---            adjacencyFilter = filter contextFilter
---            contextFilter (x,pre,post) =
---                (x,filter arcFilter pre, filter arcFilter post)
---            arcFilter (_,w) = w /= 0
+renamePlace :: (String -> String) -> Place -> Place
+renamePlace f (Place p) = Place (f p)
+
+renameTransition :: (String -> String) -> Transition -> Transition
+renameTransition f (Transition t) = Transition (f t)
+
+renamePetriNetPlacesAndTransitions :: (String -> String) -> PetriNet -> PetriNet
+renamePetriNetPlacesAndTransitions f net =
+            PetriNet {
+                name = name net,
+                places      = map (renamePlace f) $ places net,
+                transitions = map (renameTransition f) $ transitions net,
+                adjacencyP  = mapAdjacency (renamePlace f) (renameTransition f) $
+                    adjacencyP net,
+                adjacencyT  = mapAdjacency (renameTransition f) (renamePlace f) $
+                    adjacencyT net,
+                initialMarking = Marking $
+                    M.mapKeys (renamePlace f) $ getMarking $ initialMarking net,
+                ghostTransitions = map (renameTransition f) $ ghostTransitions net
+            }
+        where mapAdjacency f g m = M.mapKeys f (M.map (mapContext g) m)
+              mapContext f (pre, post) = (map (first f) pre, map (first f) post)
 
 makePetriNet :: String -> [String] -> [String] ->
         [(String, String, Integer)] ->
@@ -133,6 +141,27 @@ makePetriNet name places transitions arcs initial gs =
             buildMaps _ (l,r,_) = error $ "nodes " ++ l ++ " and " ++ r ++
                                     " both places or transitions"
             addArc (lNew,rNew) (lOld,rOld) = (lNew ++ lOld,rNew ++ rOld)
+
+-- TODO: better constructors
+makePetriNetWith :: String -> [Place] ->
+        [(Transition, ([(Place, Integer)], [(Place, Integer)]))] ->
+        [(Place, Integer)] -> [Transition] -> PetriNet
+makePetriNetWith name places ts initial gs =
+        let transitions = map fst ts
+            buildMap m (p,c) = M.insertWith addArc p c m
+            addArc (lNew,rNew) (lOld,rOld) = (lNew ++ lOld,rNew ++ rOld)
+            placeArcs = [ (i,([],[(t,w)])) | (t,(is,_)) <- ts, (i,w) <- is ] ++
+                        [ (o,([(t,w)],[])) | (t,(_,os)) <- ts, (o,w) <- os ]
+            placeMap = foldl buildMap M.empty placeArcs
+        in  PetriNet {
+                name = name,
+                places = places,
+                transitions = transitions,
+                adjacencyP = placeMap,
+                adjacencyT = M.fromList ts,
+                initialMarking = Marking (M.fromList initial),
+                ghostTransitions = gs
+            }
 
 makePetriNetWithTrans :: String -> [String] ->
         [(String, [(String, Integer)], [(String, Integer)])] ->

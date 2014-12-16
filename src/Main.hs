@@ -27,11 +27,11 @@ import Property
 import Structure
 import Solver
 import Solver.StateEquation
-import Solver.TrapConstraints
-import Solver.TransitionInvariant
-import Solver.LivenessInvariant
-import Solver.SComponent
-import Solver.CommFreeReachability
+--import Solver.TrapConstraints
+--import Solver.TransitionInvariant
+--import Solver.LivenessInvariant
+--import Solver.SComponent
+--import Solver.CommFreeReachability
 
 data InputFormat = PNET | LOLA | TPN | MIST deriving (Show,Read)
 data OutputFormat = OutLOLA | OutSARA | OutSPEC | OutDOT deriving (Read)
@@ -331,51 +331,51 @@ checkFile parser verbosity refine invariant implicitProperties transformations
         verbosePut verbosity 0 ""
         return $ resultsAnd rs
 
-placeOp :: Op -> (String, Integer) -> Formula
-placeOp op (p,w) = Atom $ LinIneq (Var p) op (Const w)
+placeOp :: Op -> (Place, Integer) -> Formula Place
+placeOp op (p,w) = LinearInequation (Var p) op (Const w)
 
 transformNet :: (PetriNet, [Property]) -> NetTransformation ->
                (PetriNet, [Property])
 transformNet (net, props) TerminationByReachability =
-        let ps = ["'sigma", "'m1", "'m2"] ++
-                 places net ++ map prime (places net)
-            is = [("'m1", 1)] ++
-                 initials net ++ map (first prime) (initials net)
+        let m1 = Place "'m1"
+            m2 = Place "'m1"
+            sigma = Place "'sigma"
+            switch = Transition "'switch"
+            primePlace = renamePlace prime
+            primeTransition = renameTransition prime
+            ps = [sigma, m1, m2] ++
+                 places net ++ map primePlace (places net)
+            is = [(Place "'m1", 1)] ++
+                 initials net ++ map (first primePlace) (initials net)
             transformTransition t =
                 let (preT, postT) = context net t
-                    pre'  = [("'m1",1)] ++ preT  ++ map (first prime) preT
-                    post' = [("'m1",1)] ++ postT ++ map (first prime) postT
-                    pre''  = ("'m2",1) : map (first prime) preT
-                    post'' = [("'m2",1), ("'sigma",1)] ++ map (first prime) postT
+                    pre'  = [(m1,1)] ++ preT  ++ map (first primePlace) preT
+                    post' = [(m1,1)] ++ postT ++ map (first primePlace) postT
+                    pre''  = (m2,1) : map (first primePlace) preT
+                    post'' = [(m2,1), (sigma,1)] ++ map (first primePlace) postT
                 in  if t `elem` ghostTransitions net then
-                        [(t, pre', post')]
+                        [(t, (pre', post'))]
                     else
-                        [(t, pre', post'), (prime t, pre'', post'')]
-            ts = ("'switch", [("'m1",1)], [("'m2",1)]) :
+                        [(t, (pre', post')), (primeTransition t, (pre'', post''))]
+            ts = (switch, ([(m1,1)], [(m2,1)])) :
                  concatMap transformTransition (transitions net)
             gs = ghostTransitions net
             prop = Property "termination by reachability" $ Safety $
-                    foldl (:&:) (Atom (LinIneq (Var "'sigma") Ge (Const 1)))
-                      (map (\p -> Atom (LinIneq
-                                (Var (prime p) :-: Var p) Ge (Const 0)))
+                    foldl (:&:) (LinearInequation (Var sigma) Ge (Const 1))
+                      (map (\p -> LinearInequation
+                                (Var (primePlace p) :-: Var p) Ge (Const 0))
                         (places net))
             -- TODO: map existing liveness properties
-        in  (makePetriNetWithTrans (name net) ps ts is gs, prop : props)
+        in  (makePetriNetWith (name net) ps ts is gs, prop : props)
 transformNet (net, props) ValidateIdentifiers =
-        let ps = map validateId $ places net
-            ts = map validateId $ transitions net
-            is = map (first validateId) $ initials net
-            as = map (\(a,b,x) -> (validateId a, validateId b, x)) $ arcs net
-            gs = map validateId $ ghostTransitions net
-            net' = makePetriNet (name net) ps ts as is gs
-            props' = map (rename validateId) props
-        in  (net', props')
+        (renamePetriNetPlacesAndTransitions validateId net,
+         map (renameProperty validateId) props)
 
 makeImplicitProperty :: PetriNet -> ImplicitProperty -> Property
 makeImplicitProperty net Termination =
         Property "termination" $ Liveness $
             foldl (:&:) FTrue
-                (map (\t -> Atom (LinIneq (Var t) Eq (Const 0)))
+                (map (\t -> LinearInequation (Var t) Eq (Const 0))
                     (ghostTransitions net))
 makeImplicitProperty net ProperTermination =
         let (finals, nonfinals) = partition (null . lpost net) (places net)
@@ -423,8 +423,8 @@ checkProperty verbosity net refine invariant p = do
         verbosePut verbosity 3 $ show p
         r <- case pcont p of
             (Safety pf) -> checkSafetyProperty verbosity net refine invariant pf
-            (Liveness pf) -> checkLivenessProperty verbosity net refine invariant pf
-            (Structural ps) -> checkStructuralProperty verbosity net ps
+            --(Liveness pf) -> checkLivenessProperty verbosity net refine invariant pf
+            --(Structural ps) -> checkStructuralProperty verbosity net ps
         verbosePut verbosity 0 $ showPropertyName p ++ " " ++
             case r of
                 Satisfied -> "is satisfied."
@@ -433,20 +433,21 @@ checkProperty verbosity net refine invariant p = do
         return r
 
 checkSafetyProperty :: Int -> PetriNet -> Bool -> Bool ->
-        Formula -> IO PropResult
+        Formula Place -> IO PropResult
 checkSafetyProperty verbosity net refine invariant f =
         -- TODO: add flag for this kind of structural check
-        if checkCommunicationFree net then do
-            verbosePut verbosity 1 "Net found to be communication-free"
-            checkSafetyPropertyByCommFree verbosity net f
-        else do
+        --if checkCommunicationFree net then do
+        --    verbosePut verbosity 1 "Net found to be communication-free"
+        --    checkSafetyPropertyByCommFree verbosity net f
+        --else
+        do
             r <- checkSafetyPropertyBySafetyRef verbosity net refine f []
             if r == Satisfied && invariant then
                 -- TODO: add invariant generation
                 error "Invariant generation for safety properties not yet supported"
             else
                 return r
-
+{-
 checkSafetyPropertyByCommFree :: Int -> PetriNet -> Formula -> IO PropResult
 checkSafetyPropertyByCommFree verbosity net f = do
         r <- checkSat $ checkCommFreeReachabilitySat net f
@@ -456,36 +457,33 @@ checkSafetyPropertyByCommFree verbosity net f = do
                 verbosePut verbosity 1 "Assignment found"
                 verbosePut verbosity 3 $ "Assignment: " ++ show a
                 return Unsatisfied
-
+-}
 checkSafetyPropertyBySafetyRef :: Int -> PetriNet -> Bool ->
-        Formula -> [[String]] -> IO PropResult
+        Formula Place -> [Trap] -> IO PropResult
 checkSafetyPropertyBySafetyRef verbosity net refine f traps = do
         r <- checkSat $ checkStateEquationSat net f traps
         case r of
             Nothing -> return Satisfied
-            Just a -> do
-                let assigned = markedPlacesFromAssignment net a
+            Just assigned -> do
                 verbosePut verbosity 1 "Assignment found"
                 verbosePut verbosity 2 $ "Places marked: " ++ show assigned
-                verbosePut verbosity 3 $ "Assignment: " ++ show a
                 if refine then do
-                    rt <- checkSat $ checkTrapSat net assigned
+                    rt <- return Nothing -- checkSat $ checkTrapSat net assigned
                     case rt of
                         Nothing -> do
                             verbosePut verbosity 1 "No trap found."
                             return Unknown
-                        Just at -> do
-                            let trap = trapFromAssignment at
+                        Just trap -> do
+                            -- let trap = trapFromAssignment at
                             verbosePut verbosity 1 "Trap found"
-                            verbosePut verbosity 2 $ "Places in trap: " ++
-                                                      show trap
-                            verbosePut verbosity 3 $ "Trap assignment: " ++
-                                                      show at
-                            checkSafetyPropertyBySafetyRef verbosity net
-                                                refine f (trap:traps)
+                            --verbosePut verbosity 2 $ "Places in trap: " ++
+                            --                          show trap
+                            return Unknown
+                            --checkSafetyPropertyBySafetyRef verbosity net
+                            --                    refine f (trap:traps)
                 else
                     return Unknown
-
+{-
 checkLivenessProperty :: Int -> PetriNet -> Bool -> Bool ->
         Formula -> IO PropResult
 checkLivenessProperty verbosity net refine invariant f = do
@@ -535,7 +533,7 @@ checkLivenessPropertyByRef verbosity net refine f comps = do
                                                   (sCompsCut:comps)
                 else
                     return (Unknown, comps)
-
+-}
 checkStructuralProperty :: Int -> PetriNet -> Structure -> IO PropResult
 checkStructuralProperty _ net struct =
         if checkStructure net struct then
