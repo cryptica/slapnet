@@ -422,7 +422,7 @@ checkProperty verbosity net refine invariant p = do
         r <- case pcont p of
             (Safety pf) -> checkSafetyProperty verbosity net refine invariant pf
             (Liveness pf) -> checkLivenessProperty verbosity net refine invariant pf
-            --(Structural ps) -> checkStructuralProperty verbosity net ps
+            (Structural ps) -> checkStructuralProperty verbosity net ps
         verbosePut verbosity 0 $ showPropertyName p ++ " " ++
             case r of
                 Satisfied -> "is satisfied."
@@ -461,9 +461,9 @@ refineSafetyProperty :: Int -> PetriNet ->
 refineSafetyProperty verbosity net f traps m = do
         r <- checkSat verbosity $ checkTrapSat net m
         case r of
-            Nothing -> do
-                return $ (Just m, traps)
-            Just trap -> do
+            Nothing ->
+                return (Just m, traps)
+            Just trap ->
                 checkSafetyProperty' verbosity net True f (trap:traps)
 
 checkLivenessProperty :: Int -> PetriNet -> Bool -> Bool ->
@@ -499,14 +499,14 @@ checkLivenessProperty' verbosity net refine f cuts = do
         r <- checkSat verbosity $ checkTransitionInvariantSat net f cuts
         case r of
             Nothing -> return (Nothing, cuts)
-            Just x -> do
+            Just x ->
                 if refine then do
                     rt <- findLivenessRefinement verbosity net
                                                 (initialMarking net) x []
                     case rt of
-                        Nothing -> do
+                        Nothing ->
                             return (Just x, cuts)
-                        Just cut -> do
+                        Just cut ->
                             checkLivenessProperty' verbosity net refine f
                                                    (cut:cuts)
                 else
