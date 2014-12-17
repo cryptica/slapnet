@@ -30,6 +30,7 @@ import Solver
 import Solver.StateEquation
 import Solver.TrapConstraints
 import Solver.TransitionInvariant
+import Solver.SubnetEmptyTrap
 --import Solver.LivenessInvariant
 --import Solver.SComponent
 --import Solver.CommFreeReachability
@@ -431,58 +432,53 @@ checkProperty verbosity net refine invariant p = do
 
 checkSafetyProperty :: Int -> PetriNet -> Bool -> Bool ->
         Formula Place -> IO PropResult
-checkSafetyProperty verbosity net refine invariant f =
-        -- TODO: add flag for this kind of structural check
-        --if checkCommunicationFree net then do
-        --    verbosePut verbosity 1 "Net found to be communication-free"
-        --    checkSafetyPropertyByCommFree verbosity net f
-        --else
-        do
-            r <- checkSafetyPropertyBySafetyRef verbosity net refine f []
-            if r == Satisfied && invariant then
-                -- TODO: add invariant generation
-                error "Invariant generation for safety properties not yet supported"
-            else
-                return r
-{-
-checkSafetyPropertyByCommFree :: Int -> PetriNet -> Formula -> IO PropResult
-checkSafetyPropertyByCommFree verbosity net f = do
-        r <- checkSat $ checkCommFreeReachabilitySat net f
+checkSafetyProperty verbosity net refine invariant f = do
+        r <- checkSafetyProperty' verbosity net refine f []
         case r of
-            Nothing -> return Satisfied
-            Just a -> do
-                verbosePut verbosity 1 "Assignment found"
-                verbosePut verbosity 3 $ "Assignment: " ++ show a
-                return Unsatisfied
--}
-checkSafetyPropertyBySafetyRef :: Int -> PetriNet -> Bool ->
-        Formula Place -> [Trap] -> IO PropResult
-checkSafetyPropertyBySafetyRef verbosity net refine f traps = do
+            (Nothing, _) ->
+                if invariant then
+                    -- TODO: add invariant generation
+                    error "Invariant generation for safety properties not yet supported"
+                else
+                    return Satisfied
+            (Just _, _) ->
+                return Unknown
+
+checkSafetyProperty' :: Int -> PetriNet -> Bool ->
+        Formula Place -> [Trap] -> IO (Maybe Marking, [Trap])
+checkSafetyProperty' verbosity net refine f traps = do
         r <- checkSat verbosity $ checkStateEquationSat net f traps
         case r of
-            Nothing -> return Satisfied
-            Just marking -> do
-                if refine then do
-                    rt <- checkSat verbosity $ checkTrapSat net marking
-                    case rt of
-                        Nothing -> do
-                            verbosePut verbosity 1 "No trap found."
-                            return Unknown
-                        Just trap -> do
-                            checkSafetyPropertyBySafetyRef verbosity net
-                                                refine f (trap:traps)
+            Nothing -> return (Nothing, traps)
+            Just m ->
+                if refine then
+                    refineSafetyProperty verbosity net f traps m
                 else
-                    return Unknown
+                    return (Just m, traps)
+
+refineSafetyProperty :: Int -> PetriNet ->
+        Formula Place -> [Trap] -> Marking -> IO (Maybe Marking, [Trap])
+refineSafetyProperty verbosity net f traps m = do
+        r <- checkSat verbosity $ checkTrapSat net m
+        case r of
+            Nothing -> do
+                return $ (Just m, traps)
+            Just trap -> do
+                checkSafetyProperty' verbosity net True f (trap:traps)
 
 checkLivenessProperty :: Int -> PetriNet -> Bool -> Bool ->
         Formula Transition -> IO PropResult
 checkLivenessProperty verbosity net refine invariant f = do
-        (r, comps) <- checkLivenessPropertyByRef verbosity net refine f []
-        return r
-        --if r == Satisfied && invariant then
-        --    generateLivenessInvariant verbosity net f comps
-        --else
-        --    return r
+        r <- checkLivenessProperty' verbosity net refine f []
+        case r of
+            (Nothing, _) ->
+                if invariant then
+                    -- TODO: add invariant generation
+                    error "Invariant generation for liveness properties not yet supported"
+                else
+                    return Satisfied
+            (Just _, _) ->
+                return Unknown
 {-
 generateLivenessInvariant :: Int -> PetriNet ->
         Formula -> [SCompCut] -> IO PropResult
@@ -497,23 +493,51 @@ generateLivenessInvariant verbosity net f comps = do
                 mapM_ print inv
                 return Satisfied
 -}
-checkLivenessPropertyByRef :: Int -> PetriNet -> Bool ->
-        Formula Transition -> [Cut] -> IO (PropResult, [Cut])
-checkLivenessPropertyByRef verbosity net refine f cuts = do
+checkLivenessProperty' :: Int -> PetriNet -> Bool ->
+        Formula Transition -> [Cut] -> IO (Maybe FiringVector, [Cut])
+checkLivenessProperty' verbosity net refine f cuts = do
         r <- checkSat verbosity $ checkTransitionInvariantSat net f cuts
         case r of
-            Nothing -> return (Satisfied, cuts)
+            Nothing -> return (Nothing, cuts)
             Just x -> do
                 if refine then do
-                    rt <- return Nothing -- checkSat $ checkSComponentSat net x
+                    rt <- findLivenessRefinement verbosity net
+                                                (initialMarking net) x []
                     case rt of
                         Nothing -> do
-                            return (Unknown, cuts)
+                            return (Just x, cuts)
                         Just cut -> do
-                            checkLivenessPropertyByRef verbosity net refine f
-                                                  (cut:cuts)
+                            checkLivenessProperty' verbosity net refine f
+                                                   (cut:cuts)
                 else
-                    return (Unknown, cuts)
+                    return (Just x, cuts)
+
+findLivenessRefinement :: Int -> PetriNet -> Marking -> FiringVector ->
+        [Trap] -> IO (Maybe Cut)
+findLivenessRefinement verbosity net m x traps = do
+        r <- checkSat verbosity $ checkSubnetEmptyTrapSat net m x
+        case r of
+            Nothing -> do
+                rm <- refineSafetyProperty verbosity net FTrue traps m
+                case rm of
+                    (Nothing, _) ->
+                        return $ Just $ generateLivenessRefinement
+                                            net x traps
+                    (Just _, _) ->
+                        return Nothing
+            Just trap -> do
+                rm <- checkSafetyProperty' verbosity net False FTrue (trap:traps)
+                case rm of
+                    (Nothing, _) ->
+                        return $ Just $ generateLivenessRefinement
+                                            net x (trap:traps)
+                    (Just m', _) ->
+                        findLivenessRefinement verbosity net m' x (trap:traps)
+
+generateLivenessRefinement :: PetriNet -> FiringVector -> [Trap] -> Cut
+generateLivenessRefinement net x traps =
+        (map (filter (\t -> value x t > 0) . mpre net) traps,
+         nubOrd (concatMap (filter (\t -> value x t == 0) . mpost net) traps))
 
 checkStructuralProperty :: Int -> PetriNet -> Structure -> IO PropResult
 checkStructuralProperty _ net struct =

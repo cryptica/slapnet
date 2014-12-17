@@ -5,7 +5,6 @@ module Solver
      getNames,makeVarMap,makeVarMapWith,
      IntConstraint,BoolConstraint,IntResult,BoolResult,
      Model,ConstraintProblem)
-     --mVal,mValues,mElemsWith,mElemSum,SModel(..),CModel(..))
 where
 
 import Data.SBV

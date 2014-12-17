@@ -5,6 +5,7 @@ where
 import Data.SBV
 import Control.Monad
 
+import Util
 import PetriNet
 import Property
 import Solver

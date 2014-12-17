@@ -6,6 +6,7 @@ import Data.SBV
 import Control.Monad
 import qualified Data.Map as M
 
+import Util
 import PetriNet
 import Solver
 

@@ -5,6 +5,7 @@ where
 import Data.SBV
 import Control.Monad
 
+import Util
 import PetriNet
 import Property
 import Solver
@@ -52,8 +53,8 @@ checkTransitionInvariant net f cuts x = do
 checkTransitionInvariantSat :: PetriNet -> Formula Transition -> [Cut] ->
         ConstraintProblem Integer FiringVector
 checkTransitionInvariantSat net f cuts =
-       let x = makeVarMap $ transitions net
-       in  ("transition invariant constraints", "transition invariant",
+        let x = makeVarMap $ transitions net
+        in  ("transition invariant constraints", "transition invariant",
             getNames x,
             checkTransitionInvariant net f cuts x,
             firingVectorFromAssignment x)
