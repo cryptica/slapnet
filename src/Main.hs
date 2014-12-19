@@ -28,7 +28,7 @@ import Property
 import Structure
 import Solver
 import Solver.StateEquation
---import Solver.TrapConstraints
+import Solver.TrapConstraints
 --import Solver.TransitionInvariant
 --import Solver.SubnetEmptyTrap
 --import Solver.LivenessInvariant
@@ -447,16 +447,15 @@ checkSafetyProperty verbosity net refine invariant f = do
 checkSafetyProperty' :: Int -> PetriNet -> Bool ->
         Formula Place -> [Trap] -> IO (Maybe Marking, [Trap])
 checkSafetyProperty' verbosity net refine f traps = do
-        r <- checkSat2 verbosity $ checkStateEquationSat net f traps
+        r <- checkSat verbosity $ checkStateEquationSat net f traps
         case r of
             Nothing -> return (Nothing, traps)
             Just m ->
                 if refine then
-                    return (Just m, traps)
-                    --refineSafetyProperty verbosity net f traps m
+                    refineSafetyProperty verbosity net f traps m
                 else
                     return (Just m, traps)
-{-
+
 refineSafetyProperty :: Int -> PetriNet ->
         Formula Place -> [Trap] -> Marking -> IO (Maybe Marking, [Trap])
 refineSafetyProperty verbosity net f traps m = do
@@ -466,7 +465,7 @@ refineSafetyProperty verbosity net f traps m = do
                 return (Just m, traps)
             Just trap ->
                 checkSafetyProperty' verbosity net True f (trap:traps)
-
+{-
 checkLivenessProperty :: Int -> PetriNet -> Bool -> Bool ->
         Formula Transition -> IO PropResult
 checkLivenessProperty verbosity net refine invariant f = do

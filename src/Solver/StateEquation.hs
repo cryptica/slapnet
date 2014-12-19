@@ -41,7 +41,7 @@ checkStateEquation net f m x traps =
         evaluateFormula f m
 
 checkStateEquationSat :: PetriNet -> Formula Place -> [Trap] ->
-        ConstraintProblem2 Integer Marking
+        ConstraintProblem Integer Marking
 checkStateEquationSat net f traps =
         let m = makeVarMap $ places net
             x = makeVarMap $ transitions net

@@ -3,46 +3,38 @@ module Solver.TrapConstraints
 where
 
 import Data.SBV
-import Control.Monad
 import qualified Data.Map as M
 
 import Util
 import PetriNet
 import Solver
 
-trapConstraints :: PetriNet -> VarMap Place -> BoolConstraint
+trapConstraints :: PetriNet -> SBMap Place -> SBool
 trapConstraints net b =
-            liftM bAnd $ mapM trapConstraint $ transitions net
-        where trapConstraint t = do
-                cPre <- mapM (val b) $ pre net t
-                cPost <- mapM (val b) $ post net t
-                return $ bOr cPre ==> bOr cPost
+            bAnd $ map trapConstraint $ transitions net
+        where trapConstraint t =
+                  bOr (mval b (pre net t)) ==> bOr (mval b (post net t))
 
-trapInitiallyMarked :: PetriNet -> VarMap Place -> BoolConstraint
-trapInitiallyMarked net b =
-        liftM bOr $ mapM (val b) $ initials net
+trapInitiallyMarked :: PetriNet -> SBMap Place -> SBool
+trapInitiallyMarked net b = bOr $ mval b $ initials net
 
-trapUnassigned :: Marking -> VarMap Place -> BoolConstraint
-trapUnassigned m b =
-        liftM bAnd $ mapM (liftM bnot . val b) $ elems m
+trapUnassigned :: Marking -> SBMap Place -> SBool
+trapUnassigned m b = bAnd $ map (bnot . val b) $ elems m
 
-checkTrap :: PetriNet -> Marking -> VarMap Place -> BoolConstraint
-checkTrap net m b = do
-        c1 <- trapConstraints net b
-        c2 <- trapInitiallyMarked net b
-        c3 <- trapUnassigned m b
-        return $ c1 &&& c2 &&& c3
+checkTrap :: PetriNet -> Marking -> SBMap Place -> SBool
+checkTrap net m b =
+        trapConstraints net b &&&
+        trapInitiallyMarked net b &&&
+        trapUnassigned m b
 
 checkTrapSat :: PetriNet -> Marking -> ConstraintProblem Bool Trap
 checkTrapSat net m =
         let b = makeVarMap $ places net
         in  ("trap constraints", "trap",
              getNames b,
-             checkTrap net m b,
-             trapFromAssignment b)
+             \fm -> checkTrap net m (fmap fm b),
+             \fm -> trapFromAssignment (fmap fm b))
 
-trapFromAssignment :: VarMap Place -> BoolResult Trap
-trapFromAssignment b = do
-        bm <- valMap b
-        return $ M.keys $ M.filter id bm
+trapFromAssignment :: BMap Place -> Trap
+trapFromAssignment b = M.keys $ M.filter id b
 

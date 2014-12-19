@@ -1,6 +1,6 @@
 module Util
     (verbosePut,Vector,value,elems,items,buildVector,makeVector,vmap,
-     nubOrd,nubOrdBy)
+     nubOrd,nubOrdBy,prime)
 where
 
 import qualified Data.Map as M
@@ -13,6 +13,8 @@ verbosePut :: Int -> Int -> String -> IO ()
 verbosePut verbosity level str =
         when (verbosity >= level) (putStrLn str)
 
+prime :: String -> String
+prime = ('\'':)
 
 newtype Vector a = Vector { getVector :: M.Map a Integer }
 
