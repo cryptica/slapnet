@@ -501,9 +501,7 @@ checkLivenessProperty' verbosity net refine f cuts = do
             Nothing -> return (Nothing, cuts)
             Just x ->
                 if refine then do
-                    rt <- findLivenessRefinementBySComponent verbosity net x
-                    --rt <- findLivenessRefinementByEmptyTraps verbosity net
-                    --                            (initialMarking net) x []
+                    rt <- findLivenessRefinement verbosity net x
                     case rt of
                         Nothing ->
                             return (Just x, cuts)
@@ -512,6 +510,15 @@ checkLivenessProperty' verbosity net refine f cuts = do
                                                    (cut:cuts)
                 else
                     return (Just x, cuts)
+
+findLivenessRefinement :: Int -> PetriNet -> FiringVector ->
+        IO (Maybe Cut)
+findLivenessRefinement verbosity net x = do
+        r1 <- findLivenessRefinementBySComponent verbosity net x
+        case r1 of
+            Nothing -> findLivenessRefinementByEmptyTraps verbosity net
+                                              (initialMarking net) x []
+            Just _ -> return r1
 
 findLivenessRefinementBySComponent :: Int -> PetriNet -> FiringVector ->
         IO (Maybe Cut)
