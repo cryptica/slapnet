@@ -1,10 +1,11 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
 
 module Solver
-    (prime,checkSat,ModelReader,val,vals,valMap,VarMap,positiveVal,zeroVal,
+    (prime,checkSat,ModelReader,val,vals,positiveVal,zeroVal,
      sumVal, getNames,makeVarMap,makeVarMapWith,mval,
      IntConstraint,BoolConstraint,IntResult,BoolResult,
-     Model,ConstraintProblem,ConstraintProblem2)
+     Model,ConstraintProblem,ConstraintProblem2,checkSat2,
+     SIMap,SBMap,IMap,BMap)
 where
 
 import Data.SBV
@@ -15,6 +16,11 @@ import Util
 
 type Model a = M.Map String a
 type VarMap a = M.Map a String
+
+type SIMap a = M.Map a SInteger
+type SBMap a = M.Map a SBool
+type IMap a = M.Map a Integer
+type BMap a = M.Map a Bool
 
 getNames :: VarMap a -> [String]
 getNames = M.elems
@@ -30,35 +36,25 @@ type ConstraintProblem a b =
 
 -- TODO try this out
 type ConstraintProblem2 a b =
-        (String, String, [String],
-         (String -> SBV a) -> SBool, (String -> a) -> b)
+        (String, String, [String], (String -> SBV a) -> SBool, (String -> a) -> b)
 
-val :: (Ord a) => VarMap a -> a -> ModelReader b b
-val ma x = do
-        mb <- ask
-        return $ mb M.! (ma M.! x)
+val :: (Ord a) => M.Map a b -> a -> b
+val = (M.!)
 
-mval :: (Ord a) => VarMap a -> [a] -> ModelReader b [b]
-mval = mapM . val
+mval :: (Ord a) => M.Map a b -> [a] -> [b]
+mval = map . val
 
-zeroVal :: (Ord a) => VarMap a -> a -> ModelReader SInteger SBool
-zeroVal ma = liftM (.==0) . val ma
+zeroVal :: (Ord a) => M.Map a SInteger -> a -> SBool
+zeroVal m x = val m x .== 0
 
-positiveVal :: (Ord a) => VarMap a -> a -> ModelReader SInteger SBool
-positiveVal ma = liftM (.>0) . val ma
+positiveVal :: (Ord a) => M.Map a SInteger -> a -> SBool
+positiveVal m x = val m x .> 0
 
-sumVal :: (Ord a, Num b) => VarMap a -> ModelReader b b
-sumVal = liftM sum . vals
+sumVal :: (Ord a, Num b) => M.Map a b -> b
+sumVal = sum . vals
 
-valMap :: (Ord a) => VarMap a -> ModelReader b (M.Map a b)
-valMap ma = do
-        mb <- ask
-        return $ M.map (mb M.!) ma
-
-vals :: (Ord a) => VarMap a -> ModelReader b [b]
-vals ma = do
-        mb <- ask
-        return $ M.elems $ M.map (mb M.!) ma
+vals :: (Ord a) => M.Map a b -> [b]
+vals = M.elems
 
 makeVarMap :: (Show a, Ord a) => [a] -> VarMap a
 makeVarMap = makeVarMapWith id
@@ -128,6 +124,31 @@ checkSat verbosity (problemName, resultName, vars, constraint, interpretation) =
             Just rawModel -> do
                 verbosePut verbosity 2 "- sat"
                 let model = runReader interpretation rawModel
+                verbosePut verbosity 3 $ "- " ++ resultName ++ ": " ++ show model
+                return $ Just model
+
+symConstraints2 :: SymWord a => [String] -> ((String -> SBV a) -> SBool) ->
+        Symbolic SBool
+symConstraints2 vars constraint = do
+        syms <- mapM exists vars
+        let symMap = M.fromList $ vars `zip` syms
+        let fm x = symMap M.! x
+        return $ constraint fm
+
+checkSat2 :: (SatModel a, SymWord a, Show a, Show b) => Int ->
+        ConstraintProblem2 a b -> IO (Maybe b)
+checkSat2 verbosity (problemName, resultName, vars, constraint, interpretation) = do
+        verbosePut verbosity 1 $ "Checking SAT of " ++ problemName
+        result <- satWith z3{verbose=verbosity >= 4} $
+                    symConstraints2 vars constraint
+        case rebuildModel vars (getModel result) of
+            Nothing -> do
+                verbosePut verbosity 2 "- unsat"
+                return Nothing
+            Just rawModel -> do
+                verbosePut verbosity 2 "- sat"
+                let fm x = rawModel M.! x
+                let model = interpretation fm
                 verbosePut verbosity 3 $ "- " ++ resultName ++ ": " ++ show model
                 return $ Just model
 

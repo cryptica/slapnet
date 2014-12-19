@@ -7,24 +7,13 @@ import Data.SBV
 import Property
 import Solver
 
-evaluateTerm :: (Ord a) => Term a -> VarMap a -> ModelReader SInteger SInteger
+evaluateTerm :: (Ord a) => Term a -> SIMap a -> SInteger
 evaluateTerm (Var x) m = val m x
-evaluateTerm (Const c) _ = return $ literal c
-evaluateTerm (Minus t) m = do
-        tVal <- evaluateTerm t m
-        return (- tVal)
-evaluateTerm (t :+: u) m = do
-        tVal <- evaluateTerm t m
-        uVal <- evaluateTerm u m
-        return $ tVal + uVal
-evaluateTerm (t :-: u) m = do
-        tVal <- evaluateTerm t m
-        uVal <- evaluateTerm u m
-        return $ tVal - uVal
-evaluateTerm (t :*: u) m = do
-        tVal <- evaluateTerm t m
-        uVal <- evaluateTerm u m
-        return $ tVal * uVal
+evaluateTerm (Const c) _ = literal c
+evaluateTerm (Minus t) m = - evaluateTerm t m
+evaluateTerm (t :+: u) m = evaluateTerm t m + evaluateTerm u m
+evaluateTerm (t :-: u) m = evaluateTerm t m - evaluateTerm u m
+evaluateTerm (t :*: u) m = evaluateTerm t m * evaluateTerm u m
 
 opToFunction :: Op -> SInteger -> SInteger -> SBool
 opToFunction Gt = (.>)
@@ -34,21 +23,11 @@ opToFunction Ne = (./=)
 opToFunction Le = (.<=)
 opToFunction Lt = (.<)
 
-evaluateFormula :: (Ord a) => Formula a -> VarMap a -> IntConstraint
-evaluateFormula FTrue _ = return true
-evaluateFormula FFalse _ = return false
-evaluateFormula (LinearInequation lhs op rhs) m = do
-        lhsVal <- evaluateTerm lhs m
-        rhsVal <- evaluateTerm rhs m
-        return $ opToFunction op lhsVal rhsVal
-evaluateFormula (Neg p) m = do
-        pVal <- evaluateFormula p m
-        return $ bnot pVal
-evaluateFormula (p :&: q) m = do
-        pVal <- evaluateFormula p m
-        qVal <- evaluateFormula q m
-        return $ pVal &&& qVal
-evaluateFormula (p :|: q) m = do
-        pVal <- evaluateFormula p m
-        qVal <- evaluateFormula q m
-        return $ pVal ||| qVal
+evaluateFormula :: (Ord a) => Formula a -> SIMap a -> SBool
+evaluateFormula FTrue _ = true
+evaluateFormula FFalse _ = false
+evaluateFormula (LinearInequation lhs op rhs) m =
+        opToFunction op (evaluateTerm lhs m) (evaluateTerm rhs m)
+evaluateFormula (Neg p) m = bnot $ evaluateFormula p m
+evaluateFormula (p :&: q) m = evaluateFormula p m &&& evaluateFormula q m
+evaluateFormula (p :|: q) m = evaluateFormula p m ||| evaluateFormula q m

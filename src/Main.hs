@@ -28,11 +28,11 @@ import Property
 import Structure
 import Solver
 import Solver.StateEquation
-import Solver.TrapConstraints
-import Solver.TransitionInvariant
-import Solver.SubnetEmptyTrap
+--import Solver.TrapConstraints
+--import Solver.TransitionInvariant
+--import Solver.SubnetEmptyTrap
 --import Solver.LivenessInvariant
-import Solver.SComponent
+--import Solver.SComponent
 --import Solver.CommFreeReachability
 
 data InputFormat = PNET | LOLA | TPN | MIST deriving (Show,Read)
@@ -421,7 +421,7 @@ checkProperty verbosity net refine invariant p = do
         verbosePut verbosity 3 $ show p
         r <- case pcont p of
             (Safety pf) -> checkSafetyProperty verbosity net refine invariant pf
-            (Liveness pf) -> checkLivenessProperty verbosity net refine invariant pf
+--            (Liveness pf) -> checkLivenessProperty verbosity net refine invariant pf
             (Structural ps) -> checkStructuralProperty verbosity net ps
         verbosePut verbosity 0 $ showPropertyName p ++ " " ++
             case r of
@@ -447,15 +447,16 @@ checkSafetyProperty verbosity net refine invariant f = do
 checkSafetyProperty' :: Int -> PetriNet -> Bool ->
         Formula Place -> [Trap] -> IO (Maybe Marking, [Trap])
 checkSafetyProperty' verbosity net refine f traps = do
-        r <- checkSat verbosity $ checkStateEquationSat net f traps
+        r <- checkSat2 verbosity $ checkStateEquationSat net f traps
         case r of
             Nothing -> return (Nothing, traps)
             Just m ->
                 if refine then
-                    refineSafetyProperty verbosity net f traps m
+                    return (Just m, traps)
+                    --refineSafetyProperty verbosity net f traps m
                 else
                     return (Just m, traps)
-
+{-
 refineSafetyProperty :: Int -> PetriNet ->
         Formula Place -> [Trap] -> Marking -> IO (Maybe Marking, [Trap])
 refineSafetyProperty verbosity net f traps m = do
@@ -479,6 +480,7 @@ checkLivenessProperty verbosity net refine invariant f = do
                     return Satisfied
             (Just _, _) ->
                 return Unknown
+-}
 {-
 generateLivenessInvariant :: Int -> PetriNet ->
         Formula -> [SCompCut] -> IO PropResult
@@ -493,6 +495,7 @@ generateLivenessInvariant verbosity net f comps = do
                 mapM_ print inv
                 return Satisfied
 -}
+{-
 checkLivenessProperty' :: Int -> PetriNet -> Bool ->
         Formula Transition -> [Cut] -> IO (Maybe FiringVector, [Cut])
 checkLivenessProperty' verbosity net refine f cuts = do
@@ -551,7 +554,7 @@ generateLivenessRefinement :: PetriNet -> FiringVector -> [Trap] -> Cut
 generateLivenessRefinement net x traps =
         (map (filter (\t -> value x t > 0) . mpre net) traps,
          nubOrd (concatMap (filter (\t -> value x t == 0) . mpost net) traps))
-
+-}
 checkStructuralProperty :: Int -> PetriNet -> Structure -> IO PropResult
 checkStructuralProperty _ net struct =
         if checkStructure net struct then

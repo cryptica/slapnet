@@ -3,7 +3,6 @@ module Solver.StateEquation
 where
 
 import Data.SBV
-import Control.Monad
 
 import Util
 import PetriNet
@@ -11,56 +10,46 @@ import Property
 import Solver
 import Solver.Formula
 
-placeConstraints :: PetriNet -> VarMap Place -> VarMap Transition -> IntConstraint
+placeConstraints :: PetriNet -> SIMap Place -> SIMap Transition -> SBool
 placeConstraints net m x =
-            liftM bAnd $ mapM checkPlaceEquation $ places net
-        where checkPlaceEquation p = do
-                mp <- val m p
-                incoming <- mapM addTransition $ lpre net p
-                outgoing <- mapM addTransition $ lpost net p
-                let pinit = literal $ initial net p
-                return $ pinit + sum incoming - sum outgoing .== mp
-              addTransition (t,w) = liftM (literal w *) (val x t)
+            bAnd $ map checkPlaceEquation $ places net
+        where checkPlaceEquation p =
+                let incoming = map addTransition $ lpre net p
+                    outgoing = map addTransition $ lpost net p
+                    pinit = literal $ initial net p
+                in  pinit + sum incoming - sum outgoing .== val m p
+              addTransition (t,w) = literal w * val x t
 
-nonNegativityConstraints :: PetriNet -> VarMap Place -> VarMap Transition ->
-        IntConstraint
-nonNegativityConstraints net m x = do
-            mnn <- mapM (checkVal m) (places net)
-            xnn <- mapM (checkVal x) (transitions net)
-            return $ bAnd mnn &&& bAnd xnn
-        where checkVal mapping n = do
-                mn <- val mapping n
-                return $ mn .>= 0
+nonNegativityConstraints :: PetriNet -> SIMap Place -> SIMap Transition -> SBool
+nonNegativityConstraints net m x =
+            let mnn = map (checkVal m) $ places net
+                xnn = map (checkVal x) $ transitions net
+            in  bAnd mnn &&& bAnd xnn
+        where checkVal mapping n = val mapping n .>= 0
 
-checkTraps :: [Trap] -> VarMap Place -> IntConstraint
-checkTraps traps m = do
-            tc <- mapM checkTrapDelta traps
-            return $ bAnd tc
-        where checkTrapDelta trap = do
-                mts <- mapM (val m) trap
-                return $ sum mts .>= 1
+checkTraps :: [Trap] -> SIMap Place -> SBool
+checkTraps traps m =
+            bAnd $ map checkTrapDelta traps
+        where checkTrapDelta trap = sum (map (val m) trap) .>= 1
 
 checkStateEquation :: PetriNet -> Formula Place ->
-        VarMap Place -> VarMap Transition -> [Trap] ->
-        IntConstraint
-checkStateEquation net f m x traps = do
-        c1 <- placeConstraints net m x
-        c2 <- nonNegativityConstraints net m x
-        c3 <- checkTraps traps m
-        c4 <- evaluateFormula f m
-        return $ c1 &&& c2 &&& c3 &&& c4
+        SIMap Place -> SIMap Transition -> [Trap] -> SBool
+checkStateEquation net f m x traps =
+        placeConstraints net m x &&&
+        nonNegativityConstraints net m x &&&
+        checkTraps traps m &&&
+        evaluateFormula f m
 
 checkStateEquationSat :: PetriNet -> Formula Place -> [Trap] ->
-        ConstraintProblem Integer Marking
+        ConstraintProblem2 Integer Marking
 checkStateEquationSat net f traps =
         let m = makeVarMap $ places net
             x = makeVarMap $ transitions net
         in  ("state equation", "marking",
              getNames m ++ getNames x,
-             checkStateEquation net f m x traps,
-             markingFromAssignment m)
+             \fm -> checkStateEquation net f (fmap fm m) (fmap fm x) traps,
+             \fm -> markingFromAssignment (fmap fm m))
 
-markingFromAssignment :: VarMap Place -> IntResult Marking
-markingFromAssignment m =
-        liftM makeVector $ valMap m
+markingFromAssignment :: IMap Place -> Marking
+markingFromAssignment = makeVector
 
