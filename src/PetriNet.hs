@@ -7,11 +7,12 @@ module PetriNet
      name,showNetName,places,transitions,
      initialMarking,initial,initials,linitials,
      pre,lpre,post,lpost,mpre,mpost,context,ghostTransitions,
-     makePetriNet,makePetriNetWithTrans,makePetriNetWith,Trap,Cut,constructCut)
+     makePetriNet,makePetriNetWithTrans,makePetriNetWith,Trap,Cut,
+     constructCut)
 where
 
 import qualified Data.Map as M
-import Control.Arrow (first)
+import Control.Arrow (first,(***))
 import Data.List (sort)
 
 import Util
@@ -56,7 +57,8 @@ type Marking = Vector Place
 type FiringVector = Vector Transition
 
 type Trap = [Place]
-type Cut = ([[Transition]], [Transition])
+-- TODO: generalize cut type
+type Cut = ([([Place], [Transition])], [Transition])
 
 data PetriNet = PetriNet {
         name :: String,
@@ -117,10 +119,17 @@ renamePetriNetPlacesAndTransitions f net =
               mapContext f (pre, post) = (map (first f) pre, map (first f) post)
 
 -- TODO: use strongly connected components and min cuts
-constructCut :: PetriNet -> FiringVector -> [Trap] -> Cut
+constructCut' :: Cut -> Cut
+constructCut' (ts, u) =
+        (nubOrd (map (sort *** sort) ts), nubOrd u)
+
+constructCut:: PetriNet -> FiringVector -> [Trap] -> Cut
 constructCut net x traps =
-        (nubOrd (map (sort . filter (\t -> val x t > 0) . mpre net) traps),
-         nubOrd (concatMap (filter (\t -> val x t == 0) . mpost net) traps))
+            constructCut' (map trapComponent traps, concatMap trapOutput traps)
+        where trapComponent trap =
+                  (trap, filter (\t -> val x t > 0) (mpre net trap))
+              trapOutput trap =
+                  filter (\t -> val x t == 0) (mpost net trap)
 
 -- TODO: better constructors, only one main constructor
 -- TODO: enforce sorted lists

@@ -31,7 +31,7 @@ import Solver.StateEquation
 import Solver.TrapConstraints
 import Solver.TransitionInvariant
 import Solver.SubnetEmptyTrap
---import Solver.LivenessInvariant
+import Solver.LivenessInvariant
 import Solver.SComponent
 --import Solver.CommFreeReachability
 
@@ -471,10 +471,17 @@ checkLivenessProperty :: Int -> PetriNet -> Bool -> Bool ->
 checkLivenessProperty verbosity net refine invariant f = do
         r <- checkLivenessProperty' verbosity net refine f []
         case r of
-            (Nothing, _) ->
-                if invariant then
-                    -- TODO: add invariant generation
-                    error "Invariant generation for liveness properties not yet supported"
+            (Nothing, cuts) ->
+                if invariant then do
+                    r' <- checkSat verbosity $ checkLivenessInvariantSat net f cuts
+                    case r' of
+                        Nothing -> do
+                            verbosePut verbosity 0 "No invariant found"
+                            return Unknown
+                        Just inv -> do
+                            verbosePut verbosity 0 "Invariant found"
+                            mapM_ print inv
+                            return Satisfied
                 else
                     return Satisfied
             (Just _, _) ->

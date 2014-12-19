@@ -93,7 +93,6 @@ cutFromAssignment :: PetriNet -> FiringVector -> IMap Place ->
 cutFromAssignment net x p' t' y =
         let ts = filter (\t -> val x t > 0) $ elems $ M.filter (> 0) t'
             (t1, t2) = partition (\t -> val y t > 0) ts
-        --let (ts, u) = partition (\t -> val x t > 0) $ elems $ M.filter (> 0) t'
             s1 = filter (\p -> val p' p > 0) $ mpre net t1
             s2 = filter (\p -> val p' p > 0) $ mpre net t2
         in  constructCut net x [s1,s2]

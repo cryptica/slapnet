@@ -28,7 +28,7 @@ nonnegativityConstraints x = bAnd $ map (.>= 0) (vals x)
 checkCuts :: [Cut] -> SIMap Transition -> SBool
 checkCuts cuts x = bAnd $ map checkCut cuts
         where checkCut (ts, u) =
-                  let cPre = map (bOr . map (positiveVal x)) ts
+                  let cPre = map (bOr . map (positiveVal x) . snd) ts
                       cPost = map (positiveVal x) u
                   in  bAnd cPre ==> bOr cPost
 
