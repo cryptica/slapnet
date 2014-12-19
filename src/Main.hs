@@ -516,9 +516,9 @@ checkLivenessProperty' verbosity net refine f cuts = do
 findLivenessRefinement :: Int -> PetriNet -> FiringVector ->
         IO (Maybe Cut)
 findLivenessRefinement verbosity net x = do
-        r1 <- findLivenessRefinementByEmptyTraps verbosity net
-                                              (initialMarking net) x []
-        --r1 <- findLivenessRefinementBySComponent verbosity net x
+        --r1 <- findLivenessRefinementByEmptyTraps verbosity net
+        --                                      (initialMarking net) x []
+        r1 <- findLivenessRefinementBySComponent verbosity net x
         case r1 of
             Nothing -> findLivenessRefinementByEmptyTraps verbosity net
                                               (initialMarking net) x []
@@ -543,19 +543,18 @@ findLivenessRefinementByEmptyTraps verbosity net m x traps = do
                     (Just _, _) ->
                         return Nothing
             Just trap -> do
-                rm <- checkSafetyProperty' verbosity net False FTrue (trap:traps)
+                let traps' = trap:traps
+                rm <- checkSafetyProperty' verbosity net False FTrue traps'
                 case rm of
                     (Nothing, _) -> do
-                        cut <- generateLivenessRefinement verbosity net x traps
+                        cut <- generateLivenessRefinement verbosity net x traps'
                         return $ Just cut
                     (Just m', _) ->
-                        findLivenessRefinementByEmptyTraps verbosity net m' x (trap:traps)
+                        findLivenessRefinementByEmptyTraps verbosity net m' x traps'
 
 generateLivenessRefinement :: Int -> PetriNet -> FiringVector -> [Trap] -> IO Cut
 generateLivenessRefinement verbosity net x traps = do
-        let ts = map (filter (\t -> val x t > 0) . mpre net) traps
-        let u = nubOrd (concatMap (filter (\t -> val x t == 0) . mpost net) traps)
-        let cut = (ts,u)
+        let cut = constructCut net x traps
         verbosePut verbosity 3 $ "- cut: " ++ show cut
         return cut
 

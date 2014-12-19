@@ -4,13 +4,15 @@
 module PetriNet
     (PetriNet,Place(..),Transition(..),Marking,FiringVector,
      renamePlace,renameTransition,renamePetriNetPlacesAndTransitions,
-     name,showNetName,places,transitions,initialMarking,initial,initials,linitials,
+     name,showNetName,places,transitions,
+     initialMarking,initial,initials,linitials,
      pre,lpre,post,lpost,mpre,mpost,context,ghostTransitions,
-     makePetriNet,makePetriNetWithTrans,makePetriNetWith,Trap,Cut)
+     makePetriNet,makePetriNetWithTrans,makePetriNetWith,Trap,Cut,constructCut)
 where
 
 import qualified Data.Map as M
 import Control.Arrow (first)
+import Data.List (sort)
 
 import Util
 
@@ -113,6 +115,12 @@ renamePetriNetPlacesAndTransitions f net =
             }
         where mapAdjacency f g m = M.mapKeys f (M.map (mapContext g) m)
               mapContext f (pre, post) = (map (first f) pre, map (first f) post)
+
+-- TODO: use strongly connected components and min cuts
+constructCut :: PetriNet -> FiringVector -> [Trap] -> Cut
+constructCut net x traps =
+        (nubOrd (map (sort . filter (\t -> val x t > 0) . mpre net) traps),
+         nubOrd (concatMap (filter (\t -> val x t == 0) . mpost net) traps))
 
 -- TODO: better constructors, only one main constructor
 -- TODO: enforce sorted lists

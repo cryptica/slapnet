@@ -43,5 +43,6 @@ checkSat verbosity (problemName, resultName, vars, constraint, interpretation) =
                 let fm x = rawModel M.! x
                 let model = interpretation fm
                 verbosePut verbosity 3 $ "- " ++ resultName ++ ": " ++ show model
+                verbosePut verbosity 4 $ "- raw model: " ++ show rawModel
                 return $ Just model
 
