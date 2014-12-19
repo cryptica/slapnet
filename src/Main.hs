@@ -32,7 +32,7 @@ import Solver.TrapConstraints
 import Solver.TransitionInvariant
 import Solver.SubnetEmptyTrap
 --import Solver.LivenessInvariant
---import Solver.SComponent
+import Solver.SComponent
 --import Solver.CommFreeReachability
 
 data InputFormat = PNET | LOLA | TPN | MIST deriving (Show,Read)
@@ -501,8 +501,9 @@ checkLivenessProperty' verbosity net refine f cuts = do
             Nothing -> return (Nothing, cuts)
             Just x ->
                 if refine then do
-                    rt <- findLivenessRefinement verbosity net
-                                                (initialMarking net) x []
+                    rt <- findLivenessRefinementBySComponent verbosity net x
+                    --rt <- findLivenessRefinementByEmptyTraps verbosity net
+                    --                            (initialMarking net) x []
                     case rt of
                         Nothing ->
                             return (Just x, cuts)
@@ -512,9 +513,14 @@ checkLivenessProperty' verbosity net refine f cuts = do
                 else
                     return (Just x, cuts)
 
-findLivenessRefinement :: Int -> PetriNet -> Marking -> FiringVector ->
+findLivenessRefinementBySComponent :: Int -> PetriNet -> FiringVector ->
+        IO (Maybe Cut)
+findLivenessRefinementBySComponent verbosity net x =
+        checkSat verbosity $ checkSComponentSat net x
+
+findLivenessRefinementByEmptyTraps :: Int -> PetriNet -> Marking -> FiringVector ->
         [Trap] -> IO (Maybe Cut)
-findLivenessRefinement verbosity net m x traps = do
+findLivenessRefinementByEmptyTraps verbosity net m x traps = do
         r <- checkSat verbosity $ checkSubnetEmptyTrapSat net m x
         case r of
             Nothing -> do
@@ -532,7 +538,7 @@ findLivenessRefinement verbosity net m x traps = do
                         return $ Just $ generateLivenessRefinement
                                             net x (trap:traps)
                     (Just m', _) ->
-                        findLivenessRefinement verbosity net m' x (trap:traps)
+                        findLivenessRefinementByEmptyTraps verbosity net m' x (trap:traps)
 
 generateLivenessRefinement :: PetriNet -> FiringVector -> [Trap] -> Cut
 generateLivenessRefinement net x traps =

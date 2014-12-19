@@ -1,85 +1,117 @@
 module Solver.SComponent
-    (checkSComponent,checkSComponentSat,
-     getSComponentOutIn,
-     getSComponentCompsCut,
-     SCompCut)
+    (checkSComponentSat)
 where
 
 import Data.SBV
 import Data.List (partition)
+import Control.Monad
+import qualified Data.Map as M
 
+import Util
 import PetriNet
 import Solver
 
-type SCompCut = [([String], Bool)]
+checkPrePostPlaces :: PetriNet -> VarMap Place -> VarMap Transition ->
+        IntConstraint
+checkPrePostPlaces net p' t' =
+            liftM bAnd $ mapM checkPrePostPlace $ places net
+        where checkPrePostPlace p = do
+                incoming <- mapM (positiveVal t') $ pre net p
+                outgoing <- mapM (positiveVal t') $ post net p
+                pVal <- positiveVal p' p
+                return $ pVal ==> bAnd incoming &&& bAnd outgoing
 
-checkPrePostPlaces :: PetriNet -> ModelSI -> SBool
-checkPrePostPlaces net m =
-            bAnd $ map checkPrePostPlace $ places net
-        where checkPrePostPlace p =
-                let incoming = map (mElem m) $ pre net p
-                    outgoing = map (mElem m) $ post net p
-                in  mElem m p ==> bAnd incoming &&& bAnd outgoing
+checkPrePostTransitions :: PetriNet -> VarMap Place -> VarMap Transition ->
+        IntConstraint
+checkPrePostTransitions net p' t' =
+            liftM bAnd $ mapM checkPrePostTransition $ transitions net
+        where checkPrePostTransition t = do
+                incoming <- mval p' $ pre net t
+                outgoing <- mval p' $ post net t
+                tVal <- positiveVal t' t
+                return $ tVal ==> sum incoming .== 1 &&& sum outgoing .== 1
 
-checkPrePostTransitions :: PetriNet -> ModelSI -> SBool
-checkPrePostTransitions net m =
-            bAnd $ map checkPrePostTransition $ transitions net
-        where checkPrePostTransition t =
-                let incoming = mElemSum m $ pre net t
-                    outgoing = mElemSum m $ post net t
-                in  mElem m t ==> incoming .== 1 &&& outgoing .== 1
+checkSubsetTransitions :: FiringVector ->
+        VarMap Transition -> VarMap Transition -> IntConstraint
+checkSubsetTransitions x t' y = do
+            yset <- mapM checkTransition $ elems x
+            ys <- sumVal y
+            ts <- liftM sum $ mval t' $ elems x
+            return $ bAnd yset &&& ys .< ts
+        where checkTransition t = do
+                yt <- positiveVal y t
+                tt <- positiveVal t' t
+                return $ yt ==> tt
 
-checkSubsetTransitions :: [String] -> ModelSI -> SBool
-checkSubsetTransitions fired m =
-            bAnd (map checkTransition fired) &&&
-            mElemSum m (map prime fired) .< mElemSum m fired
-        where checkTransition t =
-                mElem m (prime t) ==> mElem m t
+checkNotEmpty :: VarMap Transition -> IntConstraint
+checkNotEmpty y = liftM (.>0) $ sumVal y
 
-checkNotEmpty :: [String] -> ModelSI -> SBool
-checkNotEmpty fired m = mElemSum m (map prime fired) .> 0
+checkClosed :: PetriNet -> FiringVector -> VarMap Place ->
+        VarMap Transition -> IntConstraint
+checkClosed net x p' y =
+            liftM bAnd $ mapM checkPlaceClosed $ places net
+        where checkPlaceClosed p = do
+                  pVal <- positiveVal p' p
+                  postVal <- liftM bAnd $
+                                mapM checkTransition
+                                    [(t,t') | t <- pre net p, t' <- post net p,
+                                              value x t > 0, value x t' > 0 ]
+                  return $ pVal ==> postVal
+              checkTransition (t,t') = do
+                  tPre <- positiveVal y t
+                  tPost <- positiveVal y t'
+                  return $ tPre ==> tPost
 
-checkClosed :: PetriNet -> ModelI -> ModelSI -> SBool
-checkClosed net ax m =
-            bAnd (map checkPlaceClosed (places net))
-        where checkPlaceClosed p = mElem m p ==>
-                        bAnd (map checkTransition
-                             [(t,t') | t <- pre net p, t' <- post net p,
-                                       cElem ax t, cElem ax t' ])
-              checkTransition (t,t') =
-                  mElem m (prime t) ==> mElem m (prime t')
+checkTokens :: PetriNet -> VarMap Place -> IntConstraint
+checkTokens net p' =
+            liftM ((.==1) . sum) $ mapM addPlace $ linitials net
+        where addPlace (p,i) = do
+                  v <- val p' p
+                  return $ literal i * v
 
-checkTokens :: PetriNet -> ModelSI -> SBool
-checkTokens net m =
-            sum (map addPlace (initials net)) .== 1
-        where addPlace (p,x) = literal x * mVal m p
+checkBinary :: VarMap Place -> VarMap Transition ->
+        VarMap Transition -> IntConstraint
+checkBinary p' t' y = do
+            pc <- checkBins p'
+            tc <- checkBins t'
+            yc <- checkBins y
+            return $ pc &&& tc &&& yc
+        where checkBins xs = do
+                  vs <- vals xs
+                  return $ bAnd $ map (\x -> x .== 0 ||| x .== 1) vs
 
-checkBinary :: ModelSI -> SBool
-checkBinary m = bAnd $ map (\x -> x .== 0 ||| x .== 1) $ mValues m
 
-checkSComponent :: PetriNet -> [String] -> ModelI -> ModelSI -> SBool
-checkSComponent net fired ax m =
-        checkPrePostPlaces net m &&&
-        checkPrePostTransitions net m &&&
-        checkSubsetTransitions fired m &&&
-        checkNotEmpty fired m &&&
-        checkClosed net ax m &&&
-        checkTokens net m &&&
-        checkBinary m
+checkSComponent :: PetriNet -> FiringVector -> VarMap Place ->
+        VarMap Transition -> VarMap Transition -> IntConstraint
+checkSComponent net x p' t' y = do
+        c1 <- checkPrePostPlaces net p' t'
+        c2 <- checkPrePostTransitions net p' t'
+        c3 <- checkSubsetTransitions x t' y
+        c4 <- checkNotEmpty y
+        c5 <- checkClosed net x p' y
+        c6 <- checkTokens net p'
+        c7 <- checkBinary p' t' y
+        return $ c1 &&& c2 &&& c3 &&& c4 &&& c5 &&& c6 &&& c7
 
-checkSComponentSat :: PetriNet -> [String] -> ModelI -> ([String], ModelSI -> SBool)
-checkSComponentSat net fired ax =
-        (places net ++ transitions net ++ map prime fired,
-         checkSComponent net fired ax)
-
-getSComponentOutIn :: PetriNet -> ModelI -> ModelI -> ([String], [String])
-getSComponentOutIn net ax as =
-        partition (cElem ax) $ filter (cElem as) (transitions net)
+checkSComponentSat :: PetriNet -> FiringVector ->
+        ConstraintProblem Integer Cut
+checkSComponentSat net x =
+        let fired = elems x
+            p' = makeVarMap $ places net
+            t' = makeVarMap $ transitions net
+            y = makeVarMapWith prime fired
+        in  ("S-component constraints", "cut",
+            getNames p' ++ getNames t' ++ getNames y,
+            checkSComponent net x p' t' y,
+            cutFromAssignment x t' y)
 
 -- TODO: use strongly connected components and min cuts
-getSComponentCompsCut :: PetriNet -> ModelI -> ModelI -> SCompCut
-getSComponentCompsCut net ax as =
-        let (t, u) = partition (cElem ax) $ filter (cElem as) (transitions net)
-            (t1, t2) = partition (cElem as . prime) t
-        in  [(t1, True), (t2, True), (u, False)]
+cutFromAssignment :: FiringVector ->
+        VarMap Transition -> VarMap Transition -> IntResult Cut
+cutFromAssignment x t' y = do
+        tm <- valMap t'
+        ym <- valMap y
+        let (ts, u) = partition (\t -> value x t > 0) $ M.keys $ M.filter (> 0) tm
+        let (t1, t2) = partition (\t -> ym M.! t > 0) ts
+        return ([t1,t2], u)
 

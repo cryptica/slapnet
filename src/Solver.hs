@@ -1,10 +1,10 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
 
 module Solver
-    (prime,checkSat,ModelReader,val,vals,valMap,VarMap,
-     getNames,makeVarMap,makeVarMapWith,
+    (prime,checkSat,ModelReader,val,vals,valMap,VarMap,positiveVal,zeroVal,
+     sumVal, getNames,makeVarMap,makeVarMapWith,mval,
      IntConstraint,BoolConstraint,IntResult,BoolResult,
-     Model,ConstraintProblem)
+     Model,ConstraintProblem,ConstraintProblem2)
 where
 
 import Data.SBV
@@ -28,10 +28,27 @@ type BoolResult a = ModelReader Bool a
 type ConstraintProblem a b =
         (String, String, [String], ModelReader (SBV a) SBool, ModelReader a b)
 
+-- TODO try this out
+type ConstraintProblem2 a b =
+        (String, String, [String],
+         (String -> SBV a) -> SBool, (String -> a) -> b)
+
 val :: (Ord a) => VarMap a -> a -> ModelReader b b
 val ma x = do
         mb <- ask
         return $ mb M.! (ma M.! x)
+
+mval :: (Ord a) => VarMap a -> [a] -> ModelReader b [b]
+mval = mapM . val
+
+zeroVal :: (Ord a) => VarMap a -> a -> ModelReader SInteger SBool
+zeroVal ma = liftM (.==0) . val ma
+
+positiveVal :: (Ord a) => VarMap a -> a -> ModelReader SInteger SBool
+positiveVal ma = liftM (.>0) . val ma
+
+sumVal :: (Ord a, Num b) => VarMap a -> ModelReader b b
+sumVal = liftM sum . vals
 
 valMap :: (Ord a) => VarMap a -> ModelReader b (M.Map a b)
 valMap ma = do
