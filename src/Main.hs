@@ -30,9 +30,9 @@ import Solver
 import Solver.StateEquation
 import Solver.TrapConstraints
 import Solver.TransitionInvariant
---import Solver.SubnetEmptyTrap
+import Solver.SubnetEmptyTrap
 --import Solver.LivenessInvariant
---import Solver.SComponent
+import Solver.SComponent
 --import Solver.CommFreeReachability
 
 data InputFormat = PNET | LOLA | TPN | MIST deriving (Show,Read)
@@ -503,8 +503,7 @@ checkLivenessProperty' verbosity net refine f cuts = do
             Nothing -> return (Nothing, cuts)
             Just x ->
                 if refine then do
-                    --rt <- findLivenessRefinement verbosity net x
-                    let rt = Nothing
+                    rt <- findLivenessRefinement verbosity net x
                     case rt of
                         Nothing ->
                             return (Just x, cuts)
@@ -513,7 +512,7 @@ checkLivenessProperty' verbosity net refine f cuts = do
                                                    (cut:cuts)
                 else
                     return (Just x, cuts)
-{-
+
 findLivenessRefinement :: Int -> PetriNet -> FiringVector ->
         IO (Maybe Cut)
 findLivenessRefinement verbosity net x = do
@@ -554,7 +553,7 @@ generateLivenessRefinement :: PetriNet -> FiringVector -> [Trap] -> Cut
 generateLivenessRefinement net x traps =
         (map (filter (\t -> value x t > 0) . mpre net) traps,
          nubOrd (concatMap (filter (\t -> value x t == 0) . mpost net) traps))
--}
+
 checkStructuralProperty :: Int -> PetriNet -> Structure -> IO PropResult
 checkStructuralProperty _ net struct =
         if checkStructure net struct then

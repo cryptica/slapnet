@@ -4,94 +4,77 @@ where
 
 import Data.SBV
 import Data.List (partition)
-import Control.Monad
 import qualified Data.Map as M
 
 import Util
 import PetriNet
 import Solver
 
-checkPrePostPlaces :: PetriNet -> VarMap Place -> VarMap Transition ->
-        IntConstraint
+checkPrePostPlaces :: PetriNet -> SIMap Place -> SIMap Transition ->
+        SBool
 checkPrePostPlaces net p' t' =
-            liftM bAnd $ mapM checkPrePostPlace $ places net
-        where checkPrePostPlace p = do
-                incoming <- mapM (positiveVal t') $ pre net p
-                outgoing <- mapM (positiveVal t') $ post net p
-                pVal <- positiveVal p' p
-                return $ pVal ==> bAnd incoming &&& bAnd outgoing
+            bAnd $ map checkPrePostPlace $ places net
+        where checkPrePostPlace p =
+                  let incoming = map (positiveVal t') $ pre net p
+                      outgoing = map (positiveVal t') $ post net p
+                      pVal = positiveVal p' p
+                  in  pVal ==> bAnd incoming &&& bAnd outgoing
 
-checkPrePostTransitions :: PetriNet -> VarMap Place -> VarMap Transition ->
-        IntConstraint
+checkPrePostTransitions :: PetriNet -> SIMap Place -> SIMap Transition ->
+        SBool
 checkPrePostTransitions net p' t' =
-            liftM bAnd $ mapM checkPrePostTransition $ transitions net
-        where checkPrePostTransition t = do
-                incoming <- mval p' $ pre net t
-                outgoing <- mval p' $ post net t
-                tVal <- positiveVal t' t
-                return $ tVal ==> sum incoming .== 1 &&& sum outgoing .== 1
+            bAnd $ map checkPrePostTransition $ transitions net
+        where checkPrePostTransition t =
+                  let incoming = mval p' $ pre net t
+                      outgoing = mval p' $ post net t
+                      tVal = positiveVal t' t
+                  in  tVal ==> sum incoming .== 1 &&& sum outgoing .== 1
 
 checkSubsetTransitions :: FiringVector ->
-        VarMap Transition -> VarMap Transition -> IntConstraint
-checkSubsetTransitions x t' y = do
-            yset <- mapM checkTransition $ elems x
-            ys <- sumVal y
-            ts <- liftM sum $ mval t' $ elems x
-            return $ bAnd yset &&& ys .< ts
-        where checkTransition t = do
-                yt <- positiveVal y t
-                tt <- positiveVal t' t
-                return $ yt ==> tt
+        SIMap Transition -> SIMap Transition -> SBool
+checkSubsetTransitions x t' y =
+            let ySubset = map checkTransition $ elems x
+            in  bAnd ySubset &&& sumVal y .< sum (mval t' (elems x))
+        where checkTransition t = positiveVal y t ==> positiveVal t' t
 
-checkNotEmpty :: VarMap Transition -> IntConstraint
-checkNotEmpty y = liftM (.>0) $ sumVal y
+checkNotEmpty :: SIMap Transition -> SBool
+checkNotEmpty y = (.>0) $ sumVal y
 
-checkClosed :: PetriNet -> FiringVector -> VarMap Place ->
-        VarMap Transition -> IntConstraint
+checkClosed :: PetriNet -> FiringVector -> SIMap Place ->
+        SIMap Transition -> SBool
 checkClosed net x p' y =
-            liftM bAnd $ mapM checkPlaceClosed $ places net
-        where checkPlaceClosed p = do
-                  pVal <- positiveVal p' p
-                  postVal <- liftM bAnd $
-                                mapM checkTransition
+            bAnd $ map checkPlaceClosed $ places net
+        where checkPlaceClosed p =
+                  let pVal = positiveVal p' p
+                      postVal = bAnd $ map checkTransition
                                     [(t,t') | t <- pre net p, t' <- post net p,
                                               value x t > 0, value x t' > 0 ]
-                  return $ pVal ==> postVal
-              checkTransition (t,t') = do
-                  tPre <- positiveVal y t
-                  tPost <- positiveVal y t'
-                  return $ tPre ==> tPost
+                  in  pVal ==> postVal
+              checkTransition (t,t') = positiveVal y t ==> positiveVal y t'
 
-checkTokens :: PetriNet -> VarMap Place -> IntConstraint
+checkTokens :: PetriNet -> SIMap Place -> SBool
 checkTokens net p' =
-            liftM ((.==1) . sum) $ mapM addPlace $ linitials net
-        where addPlace (p,i) = do
-                  v <- val p' p
-                  return $ literal i * v
+            sum (map addPlace $ linitials net) .== 1
+        where addPlace (p,i) = literal i * val p' p
 
-checkBinary :: VarMap Place -> VarMap Transition ->
-        VarMap Transition -> IntConstraint
-checkBinary p' t' y = do
-            pc <- checkBins p'
-            tc <- checkBins t'
-            yc <- checkBins y
-            return $ pc &&& tc &&& yc
-        where checkBins xs = do
-                  vs <- vals xs
-                  return $ bAnd $ map (\x -> x .== 0 ||| x .== 1) vs
+checkBinary :: SIMap Place -> SIMap Transition ->
+        SIMap Transition -> SBool
+checkBinary p' t' y =
+            checkBins p' &&&
+            checkBins t' &&&
+            checkBins y
+        where checkBins xs = bAnd $ map (\x -> x .== 0 ||| x .== 1) $ vals xs
 
-
-checkSComponent :: PetriNet -> FiringVector -> VarMap Place ->
-        VarMap Transition -> VarMap Transition -> IntConstraint
-checkSComponent net x p' t' y = do
-        c1 <- checkPrePostPlaces net p' t'
-        c2 <- checkPrePostTransitions net p' t'
-        c3 <- checkSubsetTransitions x t' y
-        c4 <- checkNotEmpty y
-        c5 <- checkClosed net x p' y
-        c6 <- checkTokens net p'
-        c7 <- checkBinary p' t' y
-        return $ c1 &&& c2 &&& c3 &&& c4 &&& c5 &&& c6 &&& c7
+checkSComponent :: PetriNet -> FiringVector -> SIMap Place ->
+        SIMap Transition -> SIMap Transition -> SBool
+checkSComponent net x p' t' y =
+        checkPrePostPlaces net p' t' &&&
+        checkPrePostTransitions net p' t' &&&
+        checkSubsetTransitions x t' y &&&
+        checkNotEmpty y &&&
+        checkClosed net x p' y &&&
+        checkTokens net p' &&&
+        checkBinary p' t' y
 
 checkSComponentSat :: PetriNet -> FiringVector ->
         ConstraintProblem Integer Cut
@@ -102,16 +85,13 @@ checkSComponentSat net x =
             y = makeVarMapWith prime fired
         in  ("S-component constraints", "cut",
             getNames p' ++ getNames t' ++ getNames y,
-            checkSComponent net x p' t' y,
-            cutFromAssignment x t' y)
+            \fm -> checkSComponent net x (fmap fm p') (fmap fm t') (fmap fm y),
+            \fm -> cutFromAssignment x (fmap fm t') (fmap fm y))
 
 -- TODO: use strongly connected components and min cuts
-cutFromAssignment :: FiringVector ->
-        VarMap Transition -> VarMap Transition -> IntResult Cut
-cutFromAssignment x t' y = do
-        tm <- valMap t'
-        ym <- valMap y
-        let (ts, u) = partition (\t -> value x t > 0) $ M.keys $ M.filter (> 0) tm
-        let (t1, t2) = partition (\t -> ym M.! t > 0) ts
-        return ([t1,t2], u)
+cutFromAssignment :: FiringVector -> IMap Transition -> IMap Transition -> Cut
+cutFromAssignment x t' y =
+        let (ts, u) = partition (\t -> value x t > 0) $ M.keys $ M.filter (> 0) t'
+            (t1, t2) = partition (\t -> val y t > 0) ts
+        in  ([t1,t2], u)
 
