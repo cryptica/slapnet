@@ -7,7 +7,7 @@ import Data.SBV
 import Util
 import Property
 
-evaluateTerm :: (Ord a) => Term a -> SIMap a -> SInteger
+evaluateTerm :: (Ord a, Show a) => Term a -> SIMap a -> SInteger
 evaluateTerm (Var x) m = val m x
 evaluateTerm (Const c) _ = literal c
 evaluateTerm (Minus t) m = - evaluateTerm t m
@@ -23,7 +23,7 @@ opToFunction Ne = (./=)
 opToFunction Le = (.<=)
 opToFunction Lt = (.<)
 
-evaluateFormula :: (Ord a) => Formula a -> SIMap a -> SBool
+evaluateFormula :: (Ord a, Show a) => Formula a -> SIMap a -> SBool
 evaluateFormula FTrue _ = true
 evaluateFormula FFalse _ = false
 evaluateFormula (LinearInequation lhs op rhs) m =
