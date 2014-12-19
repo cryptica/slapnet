@@ -29,7 +29,7 @@ import Structure
 import Solver
 import Solver.StateEquation
 import Solver.TrapConstraints
---import Solver.TransitionInvariant
+import Solver.TransitionInvariant
 --import Solver.SubnetEmptyTrap
 --import Solver.LivenessInvariant
 --import Solver.SComponent
@@ -421,7 +421,7 @@ checkProperty verbosity net refine invariant p = do
         verbosePut verbosity 3 $ show p
         r <- case pcont p of
             (Safety pf) -> checkSafetyProperty verbosity net refine invariant pf
---            (Liveness pf) -> checkLivenessProperty verbosity net refine invariant pf
+            (Liveness pf) -> checkLivenessProperty verbosity net refine invariant pf
             (Structural ps) -> checkStructuralProperty verbosity net ps
         verbosePut verbosity 0 $ showPropertyName p ++ " " ++
             case r of
@@ -465,7 +465,7 @@ refineSafetyProperty verbosity net f traps m = do
                 return (Just m, traps)
             Just trap ->
                 checkSafetyProperty' verbosity net True f (trap:traps)
-{-
+
 checkLivenessProperty :: Int -> PetriNet -> Bool -> Bool ->
         Formula Transition -> IO PropResult
 checkLivenessProperty verbosity net refine invariant f = do
@@ -479,7 +479,7 @@ checkLivenessProperty verbosity net refine invariant f = do
                     return Satisfied
             (Just _, _) ->
                 return Unknown
--}
+
 {-
 generateLivenessInvariant :: Int -> PetriNet ->
         Formula -> [SCompCut] -> IO PropResult
@@ -494,7 +494,7 @@ generateLivenessInvariant verbosity net f comps = do
                 mapM_ print inv
                 return Satisfied
 -}
-{-
+
 checkLivenessProperty' :: Int -> PetriNet -> Bool ->
         Formula Transition -> [Cut] -> IO (Maybe FiringVector, [Cut])
 checkLivenessProperty' verbosity net refine f cuts = do
@@ -503,7 +503,8 @@ checkLivenessProperty' verbosity net refine f cuts = do
             Nothing -> return (Nothing, cuts)
             Just x ->
                 if refine then do
-                    rt <- findLivenessRefinement verbosity net x
+                    --rt <- findLivenessRefinement verbosity net x
+                    let rt = Nothing
                     case rt of
                         Nothing ->
                             return (Just x, cuts)
@@ -512,7 +513,7 @@ checkLivenessProperty' verbosity net refine f cuts = do
                                                    (cut:cuts)
                 else
                     return (Just x, cuts)
-
+{-
 findLivenessRefinement :: Int -> PetriNet -> FiringVector ->
         IO (Maybe Cut)
 findLivenessRefinement verbosity net x = do
