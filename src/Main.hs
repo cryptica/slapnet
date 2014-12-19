@@ -516,7 +516,9 @@ checkLivenessProperty' verbosity net refine f cuts = do
 findLivenessRefinement :: Int -> PetriNet -> FiringVector ->
         IO (Maybe Cut)
 findLivenessRefinement verbosity net x = do
-        r1 <- findLivenessRefinementBySComponent verbosity net x
+        r1 <- findLivenessRefinementByEmptyTraps verbosity net
+                                              (initialMarking net) x []
+        --r1 <- findLivenessRefinementBySComponent verbosity net x
         case r1 of
             Nothing -> findLivenessRefinementByEmptyTraps verbosity net
                                               (initialMarking net) x []
@@ -535,24 +537,27 @@ findLivenessRefinementByEmptyTraps verbosity net m x traps = do
             Nothing -> do
                 rm <- refineSafetyProperty verbosity net FTrue traps m
                 case rm of
-                    (Nothing, _) ->
-                        return $ Just $ generateLivenessRefinement
-                                            net x traps
+                    (Nothing, _) -> do
+                        cut <- generateLivenessRefinement verbosity net x traps
+                        return $ Just cut
                     (Just _, _) ->
                         return Nothing
             Just trap -> do
                 rm <- checkSafetyProperty' verbosity net False FTrue (trap:traps)
                 case rm of
-                    (Nothing, _) ->
-                        return $ Just $ generateLivenessRefinement
-                                            net x (trap:traps)
+                    (Nothing, _) -> do
+                        cut <- generateLivenessRefinement verbosity net x traps
+                        return $ Just cut
                     (Just m', _) ->
                         findLivenessRefinementByEmptyTraps verbosity net m' x (trap:traps)
 
-generateLivenessRefinement :: PetriNet -> FiringVector -> [Trap] -> Cut
-generateLivenessRefinement net x traps =
-        (map (filter (\t -> value x t > 0) . mpre net) traps,
-         nubOrd (concatMap (filter (\t -> value x t == 0) . mpost net) traps))
+generateLivenessRefinement :: Int -> PetriNet -> FiringVector -> [Trap] -> IO Cut
+generateLivenessRefinement verbosity net x traps = do
+        let ts = map (filter (\t -> val x t > 0) . mpre net) traps
+        let u = nubOrd (concatMap (filter (\t -> val x t == 0) . mpost net) traps)
+        let cut = (ts,u)
+        verbosePut verbosity 3 $ "- cut: " ++ show cut
+        return cut
 
 checkStructuralProperty :: Int -> PetriNet -> Structure -> IO PropResult
 checkStructuralProperty _ net struct =

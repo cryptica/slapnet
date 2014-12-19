@@ -4,8 +4,8 @@ where
 
 import Data.SBV
 
+import Util
 import Property
-import Solver
 
 evaluateTerm :: (Ord a) => Term a -> SIMap a -> SInteger
 evaluateTerm (Var x) m = val m x

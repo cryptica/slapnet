@@ -67,7 +67,7 @@ data PetriNet = PetriNet {
 }
 
 initial :: PetriNet -> Place -> Integer
-initial net = value (initialMarking net)
+initial net = val (initialMarking net)
 
 initials :: PetriNet -> [Place]
 initials = elems . initialMarking
@@ -108,7 +108,7 @@ renamePetriNetPlacesAndTransitions f net =
                     adjacencyP net,
                 adjacencyT  = mapAdjacency (renameTransition f) (renamePlace f) $
                     adjacencyT net,
-                initialMarking = vmap (renamePlace f) $ initialMarking net,
+                initialMarking = emap (renamePlace f) $ initialMarking net,
                 ghostTransitions = map (renameTransition f) $ ghostTransitions net
             }
         where mapAdjacency f g m = M.mapKeys f (M.map (mapContext g) m)

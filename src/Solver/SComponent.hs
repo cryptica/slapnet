@@ -48,7 +48,7 @@ checkClosed net x p' y =
                   let pVal = positiveVal p' p
                       postVal = bAnd $ map checkTransition
                                     [(t,t') | t <- pre net p, t' <- post net p,
-                                              value x t > 0, value x t' > 0 ]
+                                              val x t > 0, val x t' > 0 ]
                   in  pVal ==> postVal
               checkTransition (t,t') = positiveVal y t ==> positiveVal y t'
 
@@ -91,7 +91,7 @@ checkSComponentSat net x =
 -- TODO: use strongly connected components and min cuts
 cutFromAssignment :: FiringVector -> IMap Transition -> IMap Transition -> Cut
 cutFromAssignment x t' y =
-        let (ts, u) = partition (\t -> value x t > 0) $ M.keys $ M.filter (> 0) t'
+        let (ts, u) = partition (\t -> val x t > 0) $ M.keys $ M.filter (> 0) t'
             (t1, t2) = partition (\t -> val y t > 0) ts
         in  ([t1,t2], u)
 

@@ -13,7 +13,7 @@ subnetTrapConstraints :: PetriNet -> Marking -> FiringVector ->
         SBMap Place -> SBool
 subnetTrapConstraints net m x b =
             bAnd $ map trapConstraint $ elems x
-        where placeConstraints = mval b . filter (\p -> value m p == 0)
+        where placeConstraints = mval b . filter (\p -> val m p == 0)
               trapConstraint t =
                   bOr (placeConstraints (pre net t)) ==>
                   bOr (placeConstraints (post net t))
@@ -30,7 +30,7 @@ checkSubnetEmptyTrap net m x b =
 checkSubnetEmptyTrapSat :: PetriNet -> Marking -> FiringVector ->
         ConstraintProblem Bool Trap
 checkSubnetEmptyTrapSat net m x =
-        let b = makeVarMap $ filter (\p -> value m p == 0) $ mpost net $ elems x
+        let b = makeVarMap $ filter (\p -> val m p == 0) $ mpost net $ elems x
         in  ("subnet empty trap constraints", "trap",
             getNames b,
             \fm -> checkSubnetEmptyTrap net m x (fmap fm b),

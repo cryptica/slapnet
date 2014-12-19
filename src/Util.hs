@@ -1,46 +1,80 @@
 module Util
-    (verbosePut,Vector,value,elems,items,buildVector,makeVector,vmap,
-     nubOrd,nubOrdBy,prime)
+    (verbosePut,elems,items,emap,
+     nubOrd,nubOrdBy,prime,val,vals,mval,zeroVal,positiveVal,sumVal,
+     makeVarMap,makeVarMapWith,buildVector,makeVector,getNames,
+     Vector,Model,VarMap,SIMap,SBMap,IMap,BMap)
 where
 
+import Data.SBV
 import qualified Data.Map as M
 import Control.Monad
 import Data.List
 import Data.Ord
 import Data.Function
 
-verbosePut :: Int -> Int -> String -> IO ()
-verbosePut verbosity level str =
-        when (verbosity >= level) (putStrLn str)
+{-
+- Various maps and functions on them
+-}
 
-prime :: String -> String
-prime = ('\'':)
+type Vector a = M.Map a Integer
+type Model a = M.Map String a
+type VarMap a = M.Map a String
+type SIMap a = M.Map a SInteger
+type SBMap a = M.Map a SBool
+type IMap a = M.Map a Integer
+type BMap a = M.Map a Bool
 
-newtype Vector a = Vector { getVector :: M.Map a Integer }
+val :: (Ord a) => M.Map a b -> a -> b
+val = (M.!)
 
-instance (Show a) => Show (Vector a) where
-        show (Vector v) =
-                "[" ++ intercalate "," (map showEntry (M.toList v)) ++ "]"
-            where showEntry (i,x) =
-                    show i ++ (if x /= 1 then "(" ++ show x ++ ")" else "")
+mval :: (Ord a) => M.Map a b -> [a] -> [b]
+mval = map . val
 
-vmap :: (Ord a, Ord b) => (a -> b) -> Vector a -> Vector b
-vmap f (Vector m) = Vector $ M.mapKeys f m
+zeroVal :: (Ord a) => M.Map a SInteger -> a -> SBool
+zeroVal m x = val m x .== 0
 
-value :: (Ord a) => Vector a -> a -> Integer
-value v x = M.findWithDefault 0 x (getVector v)
+positiveVal :: (Ord a) => M.Map a SInteger -> a -> SBool
+positiveVal m x = val m x .> 0
 
-elems :: (Ord a) => Vector a -> [a]
-elems = M.keys . getVector
+sumVal :: (Ord a, Num b) => M.Map a b -> b
+sumVal = sum . vals
 
-items :: Vector a -> [(a,Integer)]
-items = M.toList . getVector
+vals :: (Ord a) => M.Map a b -> [b]
+vals = M.elems
+
+elems :: (Ord a) => M.Map a b -> [a]
+elems = M.keys
+
+items :: M.Map a b -> [(a,b)]
+items = M.toList
+
+makeVarMap :: (Show a, Ord a) => [a] -> VarMap a
+makeVarMap = makeVarMapWith id
+
+makeVarMapWith :: (Show a, Ord a) => (String -> String) -> [a] -> VarMap a
+makeVarMapWith f xs = M.fromList $ xs `zip` map (f . show) xs
+
+getNames :: VarMap a -> [String]
+getNames = M.elems
+
+--instance (Show a) => Show (Vector a) where
+--        show (Vector v) =
+--                "[" ++ intercalate "," (map showEntry (M.toList v)) ++ "]"
+--            where showEntry (i,x) =
+--                    show i ++ (if x /= 1 then "(" ++ show x ++ ")" else "")
+
+emap :: (Ord a, Ord b) => (a -> b) -> M.Map a c -> M.Map b c
+emap = M.mapKeys
 
 buildVector :: (Ord a) => [(a, Integer)] -> Vector a
-buildVector = makeVector . M.fromList
+buildVector = M.fromList
 
 makeVector :: (Ord a) => M.Map a Integer -> Vector a
-makeVector = Vector . M.filter (/=0)
+makeVector = M.filter (/=0)
+
+{-
+- List functions
+-}
 
 nubOrd :: (Ord a) => [a] -> [a]
 nubOrd = nubOrdBy id
@@ -48,5 +82,15 @@ nubOrd = nubOrdBy id
 nubOrdBy :: (Ord b) => (a -> b) -> [a] -> [a]
 nubOrdBy f = map head . groupBy ((==) `on` f) . sortBy (comparing f)
 
+{-
+- TODO: IO wrapper with options
+-}
+
+verbosePut :: Int -> Int -> String -> IO ()
+verbosePut verbosity level str =
+        when (verbosity >= level) (putStrLn str)
+
+prime :: String -> String
+prime = ('\'':)
 
 
