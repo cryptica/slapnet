@@ -25,13 +25,12 @@ finalInvariantConstraints x = sum (vals x) .> 0
 nonnegativityConstraints :: SIMap Transition -> SBool
 nonnegativityConstraints x = bAnd $ map (.>= 0) (vals x)
 
--- TODO: check how changing the representation changes result
 checkCuts :: [Cut] -> SIMap Transition -> SBool
 checkCuts cuts x = bAnd $ map checkCut cuts
         where checkCut (ts, u) =
-                  let cPre = map ((bnot . bOr) . map (positiveVal x)) ts
+                  let cPre = map (bOr . map (positiveVal x)) ts
                       cPost = map (positiveVal x) u
-                  in  bOr cPre ||| bOr cPost
+                  in  bAnd cPre ==> bOr cPost
 
 checkTransitionInvariant :: PetriNet -> Formula Transition ->
         [Cut] -> SIMap Transition -> SBool
