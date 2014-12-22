@@ -1,10 +1,10 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FunctionalDependencies #-}
 
 module Util
-    (verbosePut,elems,items,emap,
-     nubOrd,nubOrdBy,prime,val,vals,mval,zeroVal,positiveVal,sumVal,
+    (verbosePut,elems,items,emap,prime,numPref,
+     nubOrd,nubOrdBy,val,vals,mval,zeroVal,positiveVal,sumVal,
      makeVarMap,makeVarMapWith,buildVector,makeVector,getNames,
-     Vector,Model,VarMap,SIMap,SBMap,IMap,BMap)
+     Vector,Model,VarMap,SIMap,SBMap,IMap,BMap,showWeighted)
 where
 
 import Data.SBV
@@ -99,7 +99,16 @@ verbosePut :: Int -> Int -> String -> IO ()
 verbosePut verbosity level str =
         when (verbosity >= level) (putStrLn str)
 
+{-
+- String functions
+-}
+
 prime :: String -> String
 prime = ('\'':)
 
+numPref :: String -> [String]
+numPref s = map (\i -> s ++ show i) [(1::Integer)..]
+
+showWeighted :: (Show a, Num b, Eq b, Show b) => (a, b) -> String
+showWeighted (x, w) = (if w == 1 then "" else show w) ++ show x
 

@@ -29,8 +29,7 @@ showSimpleCuts cs inv = intercalate " ∧ " (map showTrans cs)
 instance Show LivenessInvariant where
         show (RankingFunction (n, cs, xs)) = n ++
                     " [" ++ showSimpleCuts cs True ++ "]: " ++
-                    intercalate " + " (map showPlace (items xs))
-                where showPlace (p, w) = show w ++ show p
+                    intercalate " + " (map showWeighted (items xs))
         show (ComponentCut (n, cs, ps)) = n ++
                     " [" ++ showSimpleCuts cs False ++ "]: " ++
                     show ps
@@ -40,9 +39,6 @@ type NamedCut = (String, [(String, SimpleCut)])
 
 placeName :: String -> Place -> String
 placeName n p = n ++ "@p" ++ show p
-
-numPref :: String -> [String]
-numPref s = map (\i -> s ++ show i) [(1::Integer)..]
 
 generateCuts :: Formula Transition -> [Cut] -> [NamedCut]
 generateCuts f cuts =
@@ -112,6 +108,7 @@ checkLivenessInvariant :: PetriNet -> [NamedCut] -> SIMap String -> SBool
 checkLivenessInvariant net cuts m =
         bAnd (map (checkCut net m) cuts)
 
+-- TODO: split up into many smaller sat problems
 checkLivenessInvariantSat :: PetriNet -> Formula Transition -> [Cut] ->
         ConstraintProblem Integer [LivenessInvariant]
 checkLivenessInvariantSat net f cuts =

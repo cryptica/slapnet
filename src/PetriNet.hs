@@ -13,7 +13,7 @@ where
 
 import qualified Data.Map as M
 import Control.Arrow (first,(***))
-import Data.List (sort)
+import Data.List (sort,(\\))
 
 import Util
 
@@ -27,6 +27,7 @@ instance Show Transition where
 
 type ContextMap a b = M.Map a ([(b, Integer)],[(b, Integer)])
 
+-- TODO: Use Map/Set for pre/post
 class (Ord a, Ord b) => Nodes a b | a -> b where
         lpre :: PetriNet -> a -> [(b, Integer)]
         lpre net = fst . context net
@@ -118,18 +119,14 @@ renamePetriNetPlacesAndTransitions f net =
         where mapAdjacency f g m = M.mapKeys f (M.map (mapContext g) m)
               mapContext f (pre, post) = (map (first f) pre, map (first f) post)
 
--- TODO: use strongly connected components and min cuts
-constructCut' :: Cut -> Cut
-constructCut' (ts, u) =
-        (nubOrd (map (sort *** sort) ts), nubOrd u)
-
+-- TODO: better cuts, scc, min cut?
 constructCut:: PetriNet -> FiringVector -> [Trap] -> Cut
-constructCut net x traps =
-            constructCut' (map trapComponent traps, concatMap trapOutput traps)
+constructCut net _ traps =
+            uniqueCut (map trapComponent traps, concatMap trapOutput traps)
         where trapComponent trap =
-                  (trap, filter (\t -> val x t > 0) (mpre net trap))
-              trapOutput trap =
-                  filter (\t -> val x t == 0) (mpost net trap)
+                  (trap, mpre net trap)
+              trapOutput trap = mpost net trap \\ mpre net trap
+              uniqueCut (ts, u) = (nubOrd (map (sort *** sort) ts), nubOrd u)
 
 -- TODO: better constructors, only one main constructor
 -- TODO: enforce sorted lists

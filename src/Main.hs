@@ -32,6 +32,7 @@ import Solver.TrapConstraints
 import Solver.TransitionInvariant
 import Solver.SubnetEmptyTrap
 import Solver.LivenessInvariant
+import Solver.SafetyInvariant
 import Solver.SComponent
 --import Solver.CommFreeReachability
 
@@ -435,10 +436,17 @@ checkSafetyProperty :: Int -> PetriNet -> Bool -> Bool ->
 checkSafetyProperty verbosity net refine invariant f = do
         r <- checkSafetyProperty' verbosity net refine f []
         case r of
-            (Nothing, _) ->
-                if invariant then
-                    -- TODO: add invariant generation
-                    error "Invariant generation for safety properties not yet supported"
+            (Nothing, traps) ->
+                if invariant then do
+                    r' <- checkSat verbosity $ checkSafetyInvariantSat net f traps
+                    case r' of
+                        Nothing -> do
+                            verbosePut verbosity 0 "No invariant found"
+                            return Unknown
+                        Just inv -> do
+                            verbosePut verbosity 0 "Invariant found"
+                            mapM_ print inv
+                            return Satisfied
                 else
                     return Satisfied
             (Just _, _) ->
@@ -487,21 +495,6 @@ checkLivenessProperty verbosity net refine invariant f = do
             (Just _, _) ->
                 return Unknown
 
-{-
-generateLivenessInvariant :: Int -> PetriNet ->
-        Formula -> [SCompCut] -> IO PropResult
-generateLivenessInvariant verbosity net f comps = do
-        verbosePut verbosity 1 "Generating invariant"
-        let cuts = generateCuts f comps
-        r <- checkSat $ checkLivenessInvariantSat net cuts
-        case r of
-            Nothing -> return Unsatisfied
-            Just as -> do
-                let inv = getLivenessInvariant net cuts as
-                mapM_ print inv
-                return Satisfied
--}
-
 checkLivenessProperty' :: Int -> PetriNet -> Bool ->
         Formula Transition -> [Cut] -> IO (Maybe FiringVector, [Cut])
 checkLivenessProperty' verbosity net refine f cuts = do
@@ -523,9 +516,9 @@ checkLivenessProperty' verbosity net refine f cuts = do
 findLivenessRefinement :: Int -> PetriNet -> FiringVector ->
         IO (Maybe Cut)
 findLivenessRefinement verbosity net x = do
-        --r1 <- findLivenessRefinementByEmptyTraps verbosity net
-        --                                      (initialMarking net) x []
-        r1 <- findLivenessRefinementBySComponent verbosity net x
+        r1 <- findLivenessRefinementByEmptyTraps verbosity net
+                                              (initialMarking net) x []
+        --r1 <- findLivenessRefinementBySComponent verbosity net x
         case r1 of
             Nothing -> findLivenessRefinementByEmptyTraps verbosity net
                                               (initialMarking net) x []

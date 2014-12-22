@@ -24,9 +24,7 @@ symConstraints :: SymWord a => [String] -> ((String -> SBV a) -> SBool) ->
         Symbolic SBool
 symConstraints vars constraint = do
         syms <- mapM exists vars
-        let symMap = M.fromList $ vars `zip` syms
-        let fm x = symMap M.! x
-        return $ constraint fm
+        return $ constraint $ val $ M.fromList $ vars `zip` syms
 
 checkSat :: (SatModel a, SymWord a, Show a, Show b) => Int ->
         ConstraintProblem a b -> IO (Maybe b)
@@ -40,8 +38,7 @@ checkSat verbosity (problemName, resultName, vars, constraint, interpretation) =
                 return Nothing
             Just rawModel -> do
                 verbosePut verbosity 2 "- sat"
-                let fm x = rawModel M.! x
-                let model = interpretation fm
+                let model = interpretation $ val rawModel
                 verbosePut verbosity 3 $ "- " ++ resultName ++ ": " ++ show model
                 verbosePut verbosity 4 $ "- raw model: " ++ show rawModel
                 return $ Just model
