@@ -365,7 +365,7 @@ transformNet (net, props) TerminationByReachability =
                                 (Var (primePlace p) :-: Var p) Ge (Const 0))
                         (places net))
             -- TODO: map existing liveness properties
-        in  (makePetriNetWith (name net) ps ts is gs, prop : props)
+        in  (makePetriNetWithTrans (name net) ps ts is gs, prop : props)
 transformNet (net, props) ValidateIdentifiers =
         (renamePetriNetPlacesAndTransitions validateId net,
          map (renameProperty validateId) props)
@@ -439,18 +439,22 @@ checkSafetyProperty verbosity net refine invariant f = do
             (Nothing, traps) ->
                 if invariant then do
                     r' <- checkSat verbosity $ checkSafetyInvariantSat net f traps
-                    case r' of
-                        Nothing -> do
-                            verbosePut verbosity 0 "No invariant found"
-                            return Unknown
-                        Just inv -> do
-                            verbosePut verbosity 0 "Invariant found"
-                            mapM_ print inv
-                            return Satisfied
+                    printInvariant verbosity r'
                 else
                     return Satisfied
             (Just _, _) ->
                 return Unknown
+
+printInvariant :: (Show a) => Int -> Maybe [a] -> IO PropResult
+printInvariant verbosity invResult =
+        case invResult of
+            Nothing -> do
+                verbosePut verbosity 0 "No invariant found"
+                return Unknown
+            Just inv -> do
+                verbosePut verbosity 0 "Invariant found"
+                mapM_ print inv
+                return Satisfied
 
 checkSafetyProperty' :: Int -> PetriNet -> Bool ->
         Formula Place -> [Trap] -> IO (Maybe Marking, [Trap])
@@ -482,14 +486,7 @@ checkLivenessProperty verbosity net refine invariant f = do
             (Nothing, cuts) ->
                 if invariant then do
                     r' <- checkSat verbosity $ checkLivenessInvariantSat net f cuts
-                    case r' of
-                        Nothing -> do
-                            verbosePut verbosity 0 "No invariant found"
-                            return Unknown
-                        Just inv -> do
-                            verbosePut verbosity 0 "Invariant found"
-                            mapM_ print inv
-                            return Satisfied
+                    printInvariant verbosity r'
                 else
                     return Satisfied
             (Just _, _) ->

@@ -7,11 +7,13 @@ module PetriNet
      name,showNetName,places,transitions,
      initialMarking,initial,initials,linitials,
      pre,lpre,post,lpost,mpre,mpost,context,ghostTransitions,
-     makePetriNet,makePetriNetWithTrans,makePetriNetWith,Trap,Cut,
+     makePetriNet,makePetriNetWithTrans,
+     makePetriNetFromStrings,makePetriNetWithTransFromStrings,Trap,Cut,
      constructCut)
 where
 
 import qualified Data.Map as M
+import qualified Data.Set as S
 import Control.Arrow (first,(***))
 import Data.List (sort,(\\))
 
@@ -27,7 +29,6 @@ instance Show Transition where
 
 type ContextMap a b = M.Map a ([(b, Integer)],[(b, Integer)])
 
--- TODO: Use Map/Set for pre/post
 class (Ord a, Ord b) => Nodes a b | a -> b where
         lpre :: PetriNet -> a -> [(b, Integer)]
         lpre net = fst . context net
@@ -38,9 +39,9 @@ class (Ord a, Ord b) => Nodes a b | a -> b where
         post :: PetriNet -> a -> [b]
         post net = map fst . lpost net
         lmpre :: PetriNet -> [a] -> [(b, Integer)]
-        lmpre net = nubOrdBy fst . concatMap (lpre net)
+        lmpre net = listMap . concatMap (lpre net)
         lmpost :: PetriNet -> [a] -> [(b, Integer)]
-        lmpost net = nubOrdBy fst . concatMap (lpost net)
+        lmpost net = listMap . concatMap (lpost net)
         mpre :: PetriNet -> [a] -> [b]
         mpre net = map fst . lmpre net
         mpost :: PetriNet -> [a] -> [b]
@@ -97,6 +98,15 @@ instance Show PetriNet where
                 where showContext (s,(l,r)) =
                           show l ++ " -> " ++ show s ++ " -> " ++ show r
 
+-- TODO: better cuts, scc, min cut?
+constructCut:: PetriNet -> FiringVector -> [Trap] -> Cut
+constructCut net _ traps =
+            uniqueCut (map trapComponent traps, concatMap trapOutput traps)
+        where trapComponent trap =
+                  (trap, mpre net trap)
+              trapOutput trap = mpost net trap \\ mpre net trap
+              uniqueCut (ts, u) = (listSet (map (sort *** sort) ts), listSet u)
+
 renamePlace :: (String -> String) -> Place -> Place
 renamePlace f (Place p) = Place (f p)
 
@@ -107,87 +117,95 @@ renamePetriNetPlacesAndTransitions :: (String -> String) -> PetriNet -> PetriNet
 renamePetriNetPlacesAndTransitions f net =
             PetriNet {
                 name = name net,
-                places      = map (renamePlace f) $ places net,
-                transitions = map (renameTransition f) $ transitions net,
+                places      =
+                    listSet $ map (renamePlace f) $ places net,
+                transitions =
+                    listSet $ map (renameTransition f) $ transitions net,
                 adjacencyP  = mapAdjacency (renamePlace f) (renameTransition f) $
                     adjacencyP net,
                 adjacencyT  = mapAdjacency (renameTransition f) (renamePlace f) $
                     adjacencyT net,
                 initialMarking = emap (renamePlace f) $ initialMarking net,
-                ghostTransitions = map (renameTransition f) $ ghostTransitions net
+                ghostTransitions =
+                    listSet $ map (renameTransition f) $ ghostTransitions net
             }
         where mapAdjacency f g m = M.mapKeys f (M.map (mapContext g) m)
-              mapContext f (pre, post) = (map (first f) pre, map (first f) post)
+              mapContext f (pre, post) =
+                  (listMap (map (first f) pre), listMap (map (first f) post))
 
--- TODO: better cuts, scc, min cut?
-constructCut:: PetriNet -> FiringVector -> [Trap] -> Cut
-constructCut net _ traps =
-            uniqueCut (map trapComponent traps, concatMap trapOutput traps)
-        where trapComponent trap =
-                  (trap, mpre net trap)
-              trapOutput trap = mpost net trap \\ mpre net trap
-              uniqueCut (ts, u) = (nubOrd (map (sort *** sort) ts), nubOrd u)
-
--- TODO: better constructors, only one main constructor
--- TODO: enforce sorted lists
-makePetriNet :: String -> [String] -> [String] ->
-        [(String, String, Integer)] ->
-        [(String, Integer)] -> [String] -> PetriNet
+makePetriNet :: String -> [Place] -> [Transition] ->
+        [Either (Transition, Place, Integer) (Place, Transition, Integer)] ->
+        [(Place, Integer)] -> [Transition] -> PetriNet
 makePetriNet name places transitions arcs initial gs =
-        let (adP, adT) = foldl buildMaps (M.empty, M.empty)
-                            (filter (\(_,_,w) -> w /= 0) arcs)
-        in  PetriNet {
+            PetriNet {
                 name = name,
-                places = map Place places,
-                transitions = map Transition transitions,
-                adjacencyP = adP,
-                adjacencyT = adT,
-                initialMarking = buildVector (map (first Place) initial),
-                ghostTransitions = map Transition gs
+                places = listSet places,
+                transitions = listSet transitions,
+                adjacencyP = M.map (listMap *** listMap) adP,
+                adjacencyT = M.map (listMap *** listMap)adT,
+                initialMarking = buildVector initial,
+                ghostTransitions = listSet gs
             }
         where
-            buildMaps (mp,mt) (_,_,0) = (mp,mt)
-            buildMaps (mp,mt) (l,r,w) | l `elem` places && r `elem` transitions =
+            (adP, adT) = foldl buildMaps (M.empty, M.empty) arcs
+            buildMaps (mp,mt) (Left (_,_,0)) = (mp,mt)
+            buildMaps (mp,mt) (Right (_,_,0)) = (mp,mt)
+            buildMaps (mp,mt) (Right (p,t,w)) =
                        let mp' = M.insertWith addArc
-                                    (Place l) ([],[(Transition r, w)]) mp
+                                    p ([],[(t,w)]) mp
                            mt' = M.insertWith addArc
-                                    (Transition r) ([(Place l, w)],[]) mt
+                                    t ([(p,w)],[]) mt
                        in  (mp',mt')
-            buildMaps (mp,mt) (l,r,w) | l `elem` transitions && r `elem` places =
+            buildMaps (mp,mt) (Left (t,p,w)) =
                        let mt' = M.insertWith addArc
-                                    (Transition l) ([],[(Place r, w)]) mt
+                                    t ([],[(p,w)]) mt
                            mp' = M.insertWith addArc
-                                    (Place r) ([(Transition l, w)],[]) mp
+                                    p ([(t,w)],[]) mp
                        in  (mp',mt')
-            buildMaps _ (l,r,_) = error $ "nodes " ++ l ++ " and " ++ r ++
-                                    " both places or transitions"
             addArc (lNew,rNew) (lOld,rOld) = (lNew ++ lOld,rNew ++ rOld)
 
-makePetriNetWith :: String -> [Place] ->
+makePetriNetFromStrings :: String -> [String] -> [String] ->
+        [(String, String, Integer)] ->
+        [(String, Integer)] -> [String] -> PetriNet
+makePetriNetFromStrings name places transitions arcs initial gs =
+            makePetriNet
+                name
+                (map Place (S.toAscList placeSet))
+                (map Transition (S.toAscList transitionSet))
+                (map toEitherArc arcs)
+                (map (first Place) initial)
+                (map Transition gs)
+        where
+            placeSet = S.fromList places
+            transitionSet = S.fromList transitions
+            toEitherArc (l,r,w)
+                | l `S.member` placeSet && r `S.member` transitionSet =
+                        Right (Place l, Transition r, w)
+            toEitherArc (l,r,w)
+                | l `S.member` transitionSet && r `S.member` placeSet =
+                        Left (Transition l, Place r, w)
+            toEitherArc (l,r,_) = error $ "nodes " ++ l ++ " and " ++ r ++
+                                                " both places or transitions"
+
+makePetriNetWithTrans :: String -> [Place] ->
         [(Transition, ([(Place, Integer)], [(Place, Integer)]))] ->
         [(Place, Integer)] -> [Transition] -> PetriNet
-makePetriNetWith name places ts initial gs =
-        let transitions = map fst ts
-            buildMap m (p,c) = M.insertWith addArc p c m
-            addArc (lNew,rNew) (lOld,rOld) = (lNew ++ lOld,rNew ++ rOld)
-            placeArcs = [ (i,([],[(t,w)])) | (t,(is,_)) <- ts, (i,w) <- is ] ++
-                        [ (o,([(t,w)],[])) | (t,(_,os)) <- ts, (o,w) <- os ]
-            placeMap = foldl buildMap M.empty placeArcs
-        in  PetriNet {
-                name = name,
-                places = places,
-                transitions = transitions,
-                adjacencyP = placeMap,
-                adjacencyT = M.fromList ts,
-                initialMarking = buildVector initial,
-                ghostTransitions = gs
-            }
+makePetriNetWithTrans name places ts =
+            makePetriNet name places (map fst ts) arcs
+        where
+            arcs = [ Right (p,t,w) | (t,(is,_)) <- ts, (p,w) <- is ] ++
+                   [ Left  (t,p,w) | (t,(_,os)) <- ts, (p,w) <- os ]
 
-makePetriNetWithTrans :: String -> [String] ->
-        [(String, [(String, Integer)], [(String, Integer)])] ->
+makePetriNetWithTransFromStrings :: String -> [String] ->
+        [(String, ([(String, Integer)], [(String, Integer)]))] ->
         [(String, Integer)] -> [String] -> PetriNet
-makePetriNetWithTrans name places ts initial gs =
-        let transitions = [ t | (t,_,_) <- ts ]
-            arcs = [ (i,t,w) | (t,is,_) <- ts, (i,w) <- is ] ++
-                   [ (t,o,w) | (t,_,os) <- ts, (o,w) <- os ]
-        in  makePetriNet name places transitions arcs initial gs
+makePetriNetWithTransFromStrings name places arcs initial gs =
+            makePetriNetWithTrans
+                name
+                (map Place places)
+                (map toTArc arcs)
+                (map (first Place) initial)
+                (map Transition gs)
+        where
+            toTArc (t, (is, os)) =
+                (Transition t, (map (first Place) is, map (first Place) os))

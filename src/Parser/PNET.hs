@@ -10,7 +10,7 @@ import Text.Parsec.Language (LanguageDef, emptyDef)
 import qualified Text.Parsec.Token as Token
 
 import Parser
-import PetriNet (PetriNet,makePetriNet,Place(..),Transition(..))
+import PetriNet (PetriNet,makePetriNetFromStrings,Place(..),Transition(..))
 import Property
 
 languageDef :: LanguageDef ()
@@ -116,7 +116,7 @@ petriNet = do
             name <- option "" ident
             statements <- braces (many statement)
             let (p,t,a,i) = foldl splitStatement ([],[],[],[]) statements
-            return $ makePetriNet name p t a i []
+            return $ makePetriNetFromStrings name p t a i []
         where
             splitStatement (ps,ts,as,is) stmnt = case stmnt of
                   Places p -> (p ++ ps,ts,as,is)

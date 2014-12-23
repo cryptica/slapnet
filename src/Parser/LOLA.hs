@@ -10,7 +10,7 @@ import qualified Text.Parsec.Token as Token
 
 import Parser
 import Parser.LOLAFormula
-import PetriNet (PetriNet,makePetriNetWithTrans)
+import PetriNet (PetriNet,makePetriNetWithTransFromStrings)
 import Property
 
 languageDef :: LanguageDef ()
@@ -57,7 +57,7 @@ net = do
         initial <- option [] markingList
         _ <- semi
         ts <- many1 transition
-        return $ makePetriNetWithTrans "" ps ts initial []
+        return $ makePetriNetWithTransFromStrings "" ps ts initial []
 
 placeLists :: Parser [String]
 placeLists =
@@ -80,7 +80,7 @@ marking = do
         i <- option 1 (colon *> integer)
         return (s, i)
 
-transition :: Parser (String, [(String, Integer)], [(String, Integer)])
+transition :: Parser (String, ([(String, Integer)], [(String, Integer)]))
 transition = do
         reserved "TRANSITION"
         t <- ident
@@ -92,7 +92,7 @@ transition = do
         reserved "PRODUCE"
         output <- option [] arcList
         _ <- semi
-        return (t, input, output)
+        return (t, (input, output))
 
 arcList :: Parser [(String, Integer)]
 arcList = commaSep1 arc

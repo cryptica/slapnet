@@ -2,7 +2,7 @@
 
 module Util
     (verbosePut,elems,items,emap,prime,numPref,
-     nubOrd,nubOrdBy,val,vals,mval,zeroVal,positiveVal,sumVal,
+     listSet,listMap,val,vals,mval,zeroVal,positiveVal,sumVal,
      makeVarMap,makeVarMapWith,buildVector,makeVector,getNames,
      Vector,Model,VarMap,SIMap,SBMap,IMap,BMap,showWeighted)
 where
@@ -85,11 +85,12 @@ makeVector = Vector . M.filter (/=0)
 - List functions
 -}
 
-nubOrd :: (Ord a) => [a] -> [a]
-nubOrd = nubOrdBy id
+listSet :: (Ord a) => [a] -> [a]
+listSet = map head . group . sort
 
-nubOrdBy :: (Ord b) => (a -> b) -> [a] -> [a]
-nubOrdBy f = map head . groupBy ((==) `on` f) . sortBy (comparing f)
+listMap :: (Ord a, Num b) => [(a,b)] -> [(a,b)]
+listMap = map (foldl1 (\(x1,y1) (_,y2) -> (x1,y1 + y2))) .
+        groupBy ((==) `on` fst) .  sortBy (comparing fst)
 
 {-
 - TODO: IO wrapper with options

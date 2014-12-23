@@ -10,7 +10,7 @@ import qualified Text.Parsec.Token as Token
 import Data.List (group,sort,genericLength)
 
 import Parser
-import PetriNet (PetriNet,makePetriNetWithTrans)
+import PetriNet (PetriNet,makePetriNetWithTransFromStrings)
 import Property
 
 languageDef :: LanguageDef ()
@@ -61,7 +61,7 @@ adjacencyList = do
         xs <- many1 ident
         return $ map (head &&& genericLength) $ group $ sort xs
 
-transition :: Parser (String, [(String, Integer)], [(String, Integer)])
+transition :: Parser (String, ([(String, Integer)], [(String, Integer)]))
 transition = do
         reserved "trans"
         t <- ident
@@ -69,7 +69,7 @@ transition = do
         input <- option [] (reserved "in" *> adjacencyList)
         output <- option [] (reserved "out" *> adjacencyList)
         _ <- semi
-        return (t, input, output)
+        return (t, (input, output))
 
 petriNet :: Parser PetriNet
 petriNet = do
@@ -77,7 +77,7 @@ petriNet = do
         ts <- many transition
         let places = [ p | (p,_) <- ps ]
             initial = [ (p,i) | (p,Just i) <- ps ]
-        return $ makePetriNetWithTrans "" places ts initial []
+        return $ makePetriNetWithTransFromStrings "" places ts initial []
 
 parseContent :: Parser (PetriNet,[Property])
 parseContent = do

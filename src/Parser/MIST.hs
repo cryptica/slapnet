@@ -12,7 +12,7 @@ import Text.Parsec.Language (LanguageDef, emptyDef)
 import qualified Text.Parsec.Token as Token
 
 import Parser
-import PetriNet (PetriNet,makePetriNetWithTrans,Place(..))
+import PetriNet (PetriNet,makePetriNetWithTransFromStrings,Place(..))
 import Property
 
 languageDef :: LanguageDef ()
@@ -57,8 +57,8 @@ net = do
         ts <- transitions
         reserved "init"
         (is,initTrans) <- initial
-        return $ makePetriNetWithTrans "" ps (initTrans ++ ts) is
-                 [t | (t,_,_) <- initTrans]
+        return $ makePetriNetWithTransFromStrings "" ps (initTrans ++ ts) is
+                 (map fst initTrans)
 
 prop :: Parser Property
 prop = do
@@ -75,10 +75,10 @@ ineq = do
         c <- integer
         return $ LinearInequation (Var (Place x)) Ge (Const c)
 
-transitions :: Parser [(String, [(String, Integer)], [(String, Integer)])]
+transitions :: Parser [(String, ([(String, Integer)], [(String, Integer)]))]
 transitions = do
         ts <- many1 transition
-        return $ map (\(i,(l,r)) -> ("'t" ++ show i,l,r))
+        return $ map (\(i,(l,r)) -> ("'t" ++ show i,(l,r)))
                         ([(1::Integer)..] `zip` ts)
 
 transition :: Parser ([(String, Integer)], [(String, Integer)])
@@ -105,12 +105,12 @@ transitionAssignment = do
         return (i2,fac*n)
 
 initial :: Parser ([(String, Integer)],
-                  [(String, [(String, Integer)], [(String, Integer)])])
+                  [(String, ([(String, Integer)], [(String, Integer)]))])
 initial = do
         xs <- commaSep1 initState
         let inits = [(x,i) | (x,i,_) <- xs]
         let covered = [x | (x,_,True) <- xs]
-        let initTrans = map (\(i,x) -> ("'init" ++ show i, [], [(x,1)]))
+        let initTrans = map (\(i,x) -> ("'init" ++ show i, ([], [(x,1)])))
                             ([(1::Integer)..] `zip` covered)
         return (inits, initTrans)
 
