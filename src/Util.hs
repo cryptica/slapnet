@@ -1,10 +1,11 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FunctionalDependencies #-}
 
 module Util
-    (verbosePut,elems,items,emap,prime,numPref,
+    (elems,items,emap,prime,numPref,
      listSet,listMap,val,vals,mval,zeroVal,positiveVal,sumVal,
      makeVarMap,makeVarMapWith,buildVector,makeVector,getNames,
-     Vector,Model,VarMap,SIMap,SBMap,IMap,BMap,showWeighted)
+     Vector,Model,VarMap,SIMap,SBMap,IMap,BMap,showWeighted,
+     OptIO,verbosePut,opt,putLine)
 where
 
 import Data.SBV
@@ -13,6 +14,9 @@ import Control.Monad
 import Data.List
 import Data.Ord
 import Data.Function
+import Control.Monad.Reader
+
+import Options
 
 {-
 - Various maps and functions on them
@@ -93,12 +97,21 @@ listMap = map (foldl1 (\(x1,y1) (_,y2) -> (x1,y1 + y2))) .
         groupBy ((==) `on` fst) .  sortBy (comparing fst)
 
 {-
-- TODO: IO wrapper with options
+- IO functions
 -}
 
-verbosePut :: Int -> Int -> String -> IO ()
-verbosePut verbosity level str =
-        when (verbosity >= level) (putStrLn str)
+type OptIO a = ReaderT Options IO a
+
+opt :: (Options -> a) -> OptIO a
+opt getOpt = liftM getOpt ask
+
+verbosePut ::  Int -> String -> OptIO ()
+verbosePut level str = do
+        verbosity <- opt optVerbosity
+        when (verbosity >= level) (putLine str)
+
+putLine :: String -> OptIO ()
+putLine = liftIO . putStrLn
 
 {-
 - String functions

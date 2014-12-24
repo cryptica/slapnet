@@ -1,18 +1,15 @@
-{-# LANGUAGE TupleSections #-}
-
 module Main where
 
-import System.Environment (getArgs)
 import System.Exit
 import System.IO
-import System.Console.GetOpt
 import Control.Monad
-import Control.Applicative ((<$>))
 import Control.Arrow (first)
 import Data.List (partition)
 import qualified Data.ByteString.Lazy as L
+import Control.Monad.Reader
 
 import Util
+import Options
 import Parser
 import qualified Parser.PNET as PNET
 import qualified Parser.LOLA as LOLA
@@ -36,254 +33,38 @@ import Solver.SafetyInvariant
 import Solver.SComponent
 --import Solver.CommFreeReachability
 
-data InputFormat = PNET | LOLA | TPN | MIST deriving (Show,Read)
-data OutputFormat = OutLOLA | OutSARA | OutSPEC | OutDOT deriving (Read)
 
-instance Show OutputFormat where
-        show OutLOLA = "LOLA"
-        show OutSARA = "SARA"
-        show OutSPEC = "SPEC"
-        show OutDOT = "DOT"
-
-data NetTransformation = TerminationByReachability
-                       | ValidateIdentifiers
-
-data ImplicitProperty = Termination
-                      | DeadlockFree | DeadlockFreeUnlessFinal
-                      | FinalStateUnreachable
-                      | ProperTermination
-                      | Safe | Bounded Integer
-                      | StructFreeChoice
-                      | StructParallel
-                      | StructFinalPlace
-                      | StructCommunicationFree
-                      deriving (Show,Read)
-
-data Options = Options { inputFormat :: InputFormat
-                       , optVerbosity :: Int
-                       , optShowHelp :: Bool
-                       , optShowVersion :: Bool
-                       , optProperties :: [ImplicitProperty]
-                       , optTransformations :: [NetTransformation]
-                       , optRefine :: Bool
-                       , optInvariant :: Bool
-                       , optOutput :: Maybe String
-                       , outputFormat :: OutputFormat
-                       , optUseProperties :: Bool
-                       , optPrintStructure :: Bool
-                       }
-
-startOptions :: Options
-startOptions = Options { inputFormat = PNET
-                       , optVerbosity = 1
-                       , optShowHelp = False
-                       , optShowVersion = False
-                       , optProperties = []
-                       , optTransformations = []
-                       , optRefine = True
-                       , optInvariant = False
-                       , optOutput = Nothing
-                       , outputFormat = OutLOLA
-                       , optUseProperties = True
-                       , optPrintStructure = False
-                       }
-
-options :: [ OptDescr (Options -> Either String Options) ]
-options =
-        [ Option "" ["pnet"]
-        (NoArg (\opt -> Right opt { inputFormat = PNET }))
-        "Use the pnet input format"
-
-        , Option "" ["lola"]
-        (NoArg (\opt -> Right opt { inputFormat = LOLA }))
-        "Use the lola input format"
-
-        , Option "" ["tpn"]
-        (NoArg (\opt -> Right opt { inputFormat = TPN }))
-        "Use the tpn input format"
-
-        , Option "" ["spec"]
-        (NoArg (\opt -> Right opt { inputFormat = MIST }))
-        "Use the mist input format"
-
-        , Option "s" ["structure"]
-        (NoArg (\opt -> Right opt { optPrintStructure = True }))
-        "Print structural information"
-
-        , Option "" ["validate-identifiers"]
-        (NoArg (\opt -> Right opt {
-            optTransformations = ValidateIdentifiers : optTransformations opt
-          }))
-        "Make identifiers valid for lola"
-
-        , Option "" ["termination-by-reachability"]
-        (NoArg (\opt -> Right opt {
-            optTransformations = TerminationByReachability : optTransformations opt
-          }))
-        "Prove termination by reducing it to reachability"
-
-        , Option "" ["termination"]
-        (NoArg (\opt -> Right opt {
-                   optProperties = Termination : optProperties opt
-               }))
-        "Prove that the net is terminating"
-
-        , Option "" ["proper-termination"]
-        (NoArg (\opt -> Right opt {
-                   optProperties = ProperTermination : optProperties opt
-               }))
-        "Prove termination in the final marking"
-
-        , Option "" ["deadlock-free"]
-        (NoArg (\opt -> Right opt {
-                   optProperties = DeadlockFree : optProperties opt
-               }))
-        "Prove that the net is deadlock-free"
-
-        , Option "" ["deadlock-free-unless-final"]
-        (NoArg (\opt -> Right opt {
-                   optProperties = DeadlockFreeUnlessFinal : optProperties opt
-               }))
-        ("Prove that the net is deadlock-free\n" ++
-         "unless it is in the final marking")
-
-        , Option "" ["final-state-unreachable"]
-        (NoArg (\opt -> Right opt {
-                   optProperties = FinalStateUnreachable : optProperties opt
-               }))
-        "Prove that the final state is unreachable"
-
-        , Option "" ["safe"]
-        (NoArg (\opt -> Right opt {
-                   optProperties = Safe : optProperties opt
-               }))
-        "Prove that the net is safe, i.e. 1-bounded"
-
-        , Option "" ["bounded"]
-        (ReqArg (\arg opt -> case reads arg of
-                    [(k, "")] -> Right opt {
-                           optProperties = Bounded k : optProperties opt }
-                    _ -> Left ("invalid argument for k-bounded option: " ++ arg)
-                )
-                "K")
-        "Prove that the net is K-bounded"
-
-        , Option "" ["free-choice"]
-        (NoArg (\opt -> Right opt {
-                   optProperties = StructFreeChoice : optProperties opt
-               }))
-        "Prove that the net is free-choice"
-
-        , Option "" ["parallel"]
-        (NoArg (\opt -> Right opt {
-                   optProperties = StructParallel : optProperties opt
-               }))
-        "Prove that the net has non-trivial parallellism"
-
-        , Option "" ["final-place"]
-        (NoArg (\opt -> Right opt {
-                   optProperties = StructFinalPlace : optProperties opt
-               }))
-        "Prove that there is only one needed final place"
-
-        , Option "" ["communication-free"]
-        (NoArg (\opt -> Right opt {
-                   optProperties = StructCommunicationFree : optProperties opt
-               }))
-        "Prove that the net is communication-free"
-
-        , Option "n" ["no-refinement"]
-        (NoArg (\opt -> Right opt { optRefine = False }))
-        "Don't use refinement"
-
-        , Option "i" ["invariant"]
-        (NoArg (\opt -> Right opt { optInvariant = True }))
-        "Try to generate an invariant"
-
-        , Option "o" ["output"]
-        (ReqArg (\arg opt -> Right opt {
-                        optOutput = Just arg
-                })
-                "FILE")
-        "Write net and properties to FILE"
-
-        , Option "" ["out-lola"]
-        (NoArg (\opt -> Right opt { outputFormat = OutLOLA }))
-        "Use the lola output format"
-
-        , Option "" ["out-sara"]
-        (NoArg (\opt -> Right opt { outputFormat = OutSARA }))
-        "Use the sara output format"
-
-        , Option "" ["out-spec"]
-        (NoArg (\opt -> Right opt { outputFormat = OutSPEC }))
-        "Use the spec output format"
-
-        , Option "" ["out-dot"]
-        (NoArg (\opt -> Right opt { outputFormat = OutDOT }))
-        "Use the dot output format"
-
-        , Option "" ["no-given-properties"]
-        (NoArg (\opt -> Right opt {
-                   optUseProperties = False
-               }))
-        "Do not use the properties given in the input file"
-
-        , Option "v" ["verbose"]
-        (NoArg (\opt -> Right opt { optVerbosity = optVerbosity opt + 1 }))
-        "Increase verbosity (may be specified more than once)"
-
-        , Option "q" ["quiet"]
-        (NoArg (\opt -> Right opt { optVerbosity = optVerbosity opt - 1 }))
-        "Decrease verbosity (may be specified more than once)"
-
-        , Option "V" ["version"]
-        (NoArg (\opt -> Right opt { optShowVersion = True }))
-        "Show version"
-
-        , Option "h" ["help"]
-        (NoArg (\opt -> Right opt { optShowHelp = True }))
-        "Show help"
-        ]
-
-parseArgs :: IO (Either String (Options, [String]))
-parseArgs = do
-        args <- getArgs
-        case getOpt Permute options args of
-            (actions, files, []) ->
-                return $ (,files) <$> foldl (>>=) (return startOptions) actions
-            (_, _, errs) -> return $ Left $ concat errs
-
-writeFiles :: Int -> String -> OutputFormat -> PetriNet -> [Property] -> IO ()
-writeFiles verbosity basename format net props = do
-        verbosePut verbosity 1 $ "Writing " ++ showNetName net ++ " to " ++
+writeFiles :: String -> PetriNet -> [Property] -> OptIO ()
+writeFiles basename net props = do
+        format <- opt outputFormat
+        verbosePut 1 $ "Writing " ++ showNetName net ++ " to " ++
                                   basename ++ " in format " ++ show format
         case format of
             OutLOLA -> do
-                L.writeFile basename $ LOLAPrinter.printNet net
+                liftIO $ L.writeFile basename $ LOLAPrinter.printNet net
                 mapM_ (\(p,i) -> do
                         let file = basename ++ ".task" ++ show i
-                        verbosePut verbosity 1 $ "Writing " ++ showPropertyName p
+                        verbosePut 1 $ "Writing " ++ showPropertyName p
                                                  ++ " to " ++ file
-                        L.writeFile file $ LOLAPrinter.printProperty p
+                        liftIO $ L.writeFile file $ LOLAPrinter.printProperty p
                       ) (zip props [(1::Integer)..])
             OutSARA -> do
-                L.writeFile basename $ LOLAPrinter.printNet net
-                verbosePut verbosity 1 $ "Writing properties to " ++ basename ++
+                liftIO $ L.writeFile basename $ LOLAPrinter.printNet net
+                verbosePut 1 $ "Writing properties to " ++ basename ++
                                          ".sara"
-                L.writeFile (basename ++ ".sara") $
+                liftIO $ L.writeFile (basename ++ ".sara") $
                     SARAPrinter.printProperties basename net props
             OutSPEC ->
                 mapM_ (\(p,i) -> do
                         let file = basename ++ ".target" ++ show i
-                        verbosePut verbosity 1 $ "Writing " ++ showPropertyName p
+                        verbosePut 1 $ "Writing " ++ showPropertyName p
                                                  ++ " to " ++ file
-                        L.writeFile file $ SPECPrinter.printProperty p
+                        liftIO $ L.writeFile file $ SPECPrinter.printProperty p
                       ) (zip props [(1::Integer)..])
             OutDOT ->
-                L.writeFile basename $ DOTPrinter.printNet net
+                liftIO $ L.writeFile basename $ DOTPrinter.printNet net
 
-structuralAnalysis :: PetriNet -> IO ()
+structuralAnalysis :: PetriNet -> OptIO ()
 structuralAnalysis net =  do
         let noGhost t = t `notElem` ghostTransitions net
         let initP  = filter (\x -> (not . any noGhost . pre net) x &&
@@ -296,38 +77,45 @@ structuralAnalysis net =  do
                         (transitions net)
         let finalT = filter (\t -> noGhost t && null (post net t))
                         (transitions net)
-        putStrLn $ "Places             : " ++ show (length (places net))
-        putStrLn $ "Transitions        : " ++ show (length (transitions net))
-        putStrLn $ "Initial places     : " ++ show (length initP)
-        putStrLn $ "Initial transitions: " ++ show (length initT)
-        putStrLn $ "Isolated places    : " ++ show (length isolP)
-        putStrLn $ "Final places       : " ++ show (length finalP)
-        putStrLn $ "Final transitions  : " ++ show (length finalT)
+        verbosePut 0 $ "Places             : " ++ show (length (places net))
+        verbosePut 0 $ "Transitions        : " ++ show (length (transitions net))
+        verbosePut 0 $ "Initial places     : " ++ show (length initP)
+        verbosePut 0 $ "Initial transitions: " ++ show (length initT)
+        verbosePut 0 $ "Isolated places    : " ++ show (length isolP)
+        verbosePut 0 $ "Final places       : " ++ show (length finalP)
+        verbosePut 0 $ "Final transitions  : " ++ show (length finalT)
 
-checkFile :: Parser (PetriNet,[Property]) -> Int -> Bool -> Bool ->
-            [ImplicitProperty] -> [NetTransformation] ->
-            Bool -> Maybe String -> OutputFormat -> Bool -> String ->
-            IO PropResult
-checkFile parser verbosity refine invariant implicitProperties transformations
-          useProperties output format printStruct file = do
-        verbosePut verbosity 0 $ "Reading \"" ++ file ++ "\""
-        (net,props) <- parseFile parser file
+checkFile :: String -> OptIO PropResult
+checkFile file = do
+        verbosePut 0 $ "Reading \"" ++ file ++ "\""
+        format <- opt inputFormat
+        let parser = case format of
+                             PNET -> PNET.parseContent
+                             LOLA -> LOLA.parseContent
+                             TPN -> TPN.parseContent
+                             MIST -> MIST.parseContent
+        (net,props) <- liftIO $ parseFile parser file
+        useProperties <- opt optUseProperties
         let props' = if useProperties then props else []
+        implicitProperties <- opt optProperties
         let props'' = props' ++ map (makeImplicitProperty net) implicitProperties
+        transformations <- opt optTransformations
         let (net',props''') = foldl transformNet (net,props'') transformations
-        verbosePut verbosity 1 $ "Analyzing " ++ showNetName net
-        verbosePut verbosity 2 $
+        verbosePut 1 $ "Analyzing " ++ showNetName net
+        verbosePut 2 $
                 "Places: " ++ show (length  $ places net') ++ "; " ++
                 "Transitions: " ++ show (length $ transitions net')
+        printStruct <- opt optPrintStructure
         when printStruct $ structuralAnalysis net
-        verbosePut verbosity 3 $ show net'
+        verbosePut 3 $ show net'
+        output <- opt optOutput
         case output of
             Just outputfile ->
-                writeFiles verbosity outputfile format net' props'''
+                writeFiles outputfile net' props'''
             Nothing -> return ()
         -- TODO: short-circuit?
-        rs <- mapM (checkProperty verbosity net' refine invariant) props'''
-        verbosePut verbosity 0 ""
+        rs <- mapM (checkProperty net') props'''
+        verbosePut 0 ""
         return $ resultsAnd rs
 
 placeOp :: Op -> (Place, Integer) -> Formula Place
@@ -416,147 +204,150 @@ makeImplicitProperty _ StructFinalPlace =
 makeImplicitProperty _ StructCommunicationFree =
         Property "communication free" $ Structural CommunicationFree
 
-checkProperty :: Int -> PetriNet -> Bool -> Bool -> Property -> IO PropResult
-checkProperty verbosity net refine invariant p = do
-        verbosePut verbosity 1 $ "\nChecking " ++ showPropertyName p
-        verbosePut verbosity 3 $ show p
+checkProperty :: PetriNet -> Property -> OptIO PropResult
+checkProperty net p = do
+        verbosePut 1 $ "\nChecking " ++ showPropertyName p
+        verbosePut 3 $ show p
         r <- case pcont p of
-            (Safety pf) -> checkSafetyProperty verbosity net refine invariant pf
-            (Liveness pf) -> checkLivenessProperty verbosity net refine invariant pf
-            (Structural ps) -> checkStructuralProperty verbosity net ps
-        verbosePut verbosity 0 $ showPropertyName p ++ " " ++
+            (Safety pf) -> checkSafetyProperty net pf
+            (Liveness pf) -> checkLivenessProperty net pf
+            (Structural ps) -> checkStructuralProperty net ps
+        verbosePut 0 $ showPropertyName p ++ " " ++
             case r of
                 Satisfied -> "is satisfied."
                 Unsatisfied -> "is not satisfied."
                 Unknown-> "may not be satisfied."
         return r
 
-checkSafetyProperty :: Int -> PetriNet -> Bool -> Bool ->
-        Formula Place -> IO PropResult
-checkSafetyProperty verbosity net refine invariant f = do
-        r <- checkSafetyProperty' verbosity net refine f []
+checkSafetyProperty :: PetriNet ->
+        Formula Place -> OptIO PropResult
+checkSafetyProperty net f = do
+        r <- checkSafetyProperty' net f []
         case r of
-            (Nothing, traps) ->
+            (Nothing, traps) -> do
+                invariant <- opt optInvariant
                 if invariant then do
-                    r' <- checkSat verbosity $ checkSafetyInvariantSat net f traps
-                    printInvariant verbosity r'
+                    r' <- checkSat $ checkSafetyInvariantSat net f traps
+                    printInvariant r'
                 else
                     return Satisfied
             (Just _, _) ->
                 return Unknown
 
-printInvariant :: (Show a) => Int -> Maybe [a] -> IO PropResult
-printInvariant verbosity invResult =
+printInvariant :: (Show a) => Maybe [a] -> OptIO PropResult
+printInvariant invResult =
         case invResult of
             Nothing -> do
-                verbosePut verbosity 0 "No invariant found"
+                verbosePut 0 "No invariant found"
                 return Unknown
             Just inv -> do
-                verbosePut verbosity 0 "Invariant found"
-                mapM_ print inv
+                verbosePut 0 "Invariant found"
+                mapM_ (putLine . show) inv
                 return Satisfied
 
-checkSafetyProperty' :: Int -> PetriNet -> Bool ->
-        Formula Place -> [Trap] -> IO (Maybe Marking, [Trap])
-checkSafetyProperty' verbosity net refine f traps = do
-        r <- checkSat verbosity $ checkStateEquationSat net f traps
+checkSafetyProperty' :: PetriNet ->
+        Formula Place -> [Trap] -> OptIO (Maybe Marking, [Trap])
+checkSafetyProperty' net f traps = do
+        r <- checkSat $ checkStateEquationSat net f traps
         case r of
             Nothing -> return (Nothing, traps)
-            Just m ->
+            Just m -> do
+                refine <- opt optRefine
                 if refine then
-                    refineSafetyProperty verbosity net f traps m
+                    refineSafetyProperty net f traps m
                 else
                     return (Just m, traps)
 
-refineSafetyProperty :: Int -> PetriNet ->
-        Formula Place -> [Trap] -> Marking -> IO (Maybe Marking, [Trap])
-refineSafetyProperty verbosity net f traps m = do
-        r <- checkSat verbosity $ checkTrapSat net m
+refineSafetyProperty :: PetriNet ->
+        Formula Place -> [Trap] -> Marking -> OptIO (Maybe Marking, [Trap])
+refineSafetyProperty net f traps m = do
+        r <- checkSat $ checkTrapSat net m
         case r of
             Nothing ->
                 return (Just m, traps)
             Just trap ->
-                checkSafetyProperty' verbosity net True f (trap:traps)
+                checkSafetyProperty' net f (trap:traps)
 
-checkLivenessProperty :: Int -> PetriNet -> Bool -> Bool ->
-        Formula Transition -> IO PropResult
-checkLivenessProperty verbosity net refine invariant f = do
-        r <- checkLivenessProperty' verbosity net refine f []
+checkLivenessProperty :: PetriNet ->
+        Formula Transition -> OptIO PropResult
+checkLivenessProperty net f = do
+        r <- checkLivenessProperty' net f []
         case r of
-            (Nothing, cuts) ->
+            (Nothing, cuts) -> do
+                invariant <- opt optInvariant
                 if invariant then do
-                    r' <- checkSat verbosity $ checkLivenessInvariantSat net f cuts
-                    printInvariant verbosity r'
+                    r' <- checkSat $ checkLivenessInvariantSat net f cuts
+                    printInvariant r'
                 else
                     return Satisfied
             (Just _, _) ->
                 return Unknown
 
-checkLivenessProperty' :: Int -> PetriNet -> Bool ->
-        Formula Transition -> [Cut] -> IO (Maybe FiringVector, [Cut])
-checkLivenessProperty' verbosity net refine f cuts = do
-        r <- checkSat verbosity $ checkTransitionInvariantSat net f cuts
+checkLivenessProperty' :: PetriNet ->
+        Formula Transition -> [Cut] -> OptIO (Maybe FiringVector, [Cut])
+checkLivenessProperty' net f cuts = do
+        r <- checkSat $ checkTransitionInvariantSat net f cuts
         case r of
             Nothing -> return (Nothing, cuts)
-            Just x ->
+            Just x -> do
+                refine <- opt optRefine
                 if refine then do
-                    rt <- findLivenessRefinement verbosity net x
+                    rt <- findLivenessRefinement net x
                     case rt of
                         Nothing ->
                             return (Just x, cuts)
                         Just cut ->
-                            checkLivenessProperty' verbosity net refine f
-                                                   (cut:cuts)
+                            checkLivenessProperty' net f (cut:cuts)
                 else
                     return (Just x, cuts)
 
-findLivenessRefinement :: Int -> PetriNet -> FiringVector ->
-        IO (Maybe Cut)
-findLivenessRefinement verbosity net x = do
-        r1 <- findLivenessRefinementByEmptyTraps verbosity net
-                                              (initialMarking net) x []
-        --r1 <- findLivenessRefinementBySComponent verbosity net x
+findLivenessRefinement :: PetriNet -> FiringVector ->
+        OptIO (Maybe Cut)
+findLivenessRefinement net x = do
+        --r1 <- findLivenessRefinementByEmptyTraps net (initialMarking net) x []
+        r1 <- findLivenessRefinementBySComponent net x
         case r1 of
-            Nothing -> findLivenessRefinementByEmptyTraps verbosity net
+            Nothing -> findLivenessRefinementByEmptyTraps net
                                               (initialMarking net) x []
             Just _ -> return r1
 
-findLivenessRefinementBySComponent :: Int -> PetriNet -> FiringVector ->
-        IO (Maybe Cut)
-findLivenessRefinementBySComponent verbosity net x =
-        checkSat verbosity $ checkSComponentSat net x
+findLivenessRefinementBySComponent :: PetriNet -> FiringVector ->
+        OptIO (Maybe Cut)
+findLivenessRefinementBySComponent net x =
+        checkSat $ checkSComponentSat net x
 
-findLivenessRefinementByEmptyTraps :: Int -> PetriNet -> Marking -> FiringVector ->
-        [Trap] -> IO (Maybe Cut)
-findLivenessRefinementByEmptyTraps verbosity net m x traps = do
-        r <- checkSat verbosity $ checkSubnetEmptyTrapSat net m x
+findLivenessRefinementByEmptyTraps :: PetriNet -> Marking -> FiringVector ->
+        [Trap] -> OptIO (Maybe Cut)
+findLivenessRefinementByEmptyTraps net m x traps = do
+        r <- checkSat $ checkSubnetEmptyTrapSat net m x
         case r of
             Nothing -> do
-                rm <- refineSafetyProperty verbosity net FTrue traps m
+                rm <- refineSafetyProperty net FTrue traps m
                 case rm of
                     (Nothing, _) -> do
-                        cut <- generateLivenessRefinement verbosity net x traps
+                        cut <- generateLivenessRefinement net x traps
                         return $ Just cut
                     (Just _, _) ->
                         return Nothing
             Just trap -> do
                 let traps' = trap:traps
-                rm <- checkSafetyProperty' verbosity net False FTrue traps'
+                rm <- local (\opts -> opts { optRefine = False }) $
+                            checkSafetyProperty' net FTrue traps'
                 case rm of
                     (Nothing, _) -> do
-                        cut <- generateLivenessRefinement verbosity net x traps'
+                        cut <- generateLivenessRefinement net x traps'
                         return $ Just cut
                     (Just m', _) ->
-                        findLivenessRefinementByEmptyTraps verbosity net m' x traps'
+                        findLivenessRefinementByEmptyTraps net m' x traps'
 
-generateLivenessRefinement :: Int -> PetriNet -> FiringVector -> [Trap] -> IO Cut
-generateLivenessRefinement verbosity net x traps = do
+generateLivenessRefinement :: PetriNet -> FiringVector -> [Trap] -> OptIO Cut
+generateLivenessRefinement net x traps = do
         let cut = constructCut net x traps
-        verbosePut verbosity 3 $ "- cut: " ++ show cut
+        verbosePut 3 $ "- cut: " ++ show cut
         return cut
 
-checkStructuralProperty :: Int -> PetriNet -> Structure -> IO PropResult
-checkStructuralProperty _ net struct =
+checkStructuralProperty :: PetriNet -> Structure -> OptIO PropResult
+checkStructuralProperty net struct =
         if checkStructure net struct then
             return Satisfied
         else
@@ -570,23 +361,13 @@ main = do
             Left err -> exitErrorWith err
             Right (opts, files) -> do
                 when (optShowVersion opts) (exitSuccessWith "Version 0.01")
-                when (optShowHelp opts) (exitSuccessWith
-                     (usageInfo "SLAPnet" options))
+                when (optShowHelp opts) (exitSuccessWith usageInformation)
                 when (null files) (exitErrorWith "No input file given")
-                let verbosity = optVerbosity opts
-                    refinement = optRefine opts
-                    invariant = optInvariant opts
-                let parser = case inputFormat opts of
-                                 PNET -> PNET.parseContent
-                                 LOLA -> LOLA.parseContent
-                                 TPN -> TPN.parseContent
-                                 MIST -> MIST.parseContent
-                let properties = reverse $ optProperties opts
-                let transformations = reverse $ optTransformations opts
-                rs <- mapM (checkFile parser verbosity refinement invariant
-                     properties transformations (optUseProperties opts)
-                     (optOutput opts) (outputFormat opts) (optPrintStructure opts))
-                     files
+                let opts' = opts {
+                        optProperties = reverse (optProperties opts),
+                        optTransformations= reverse (optTransformations opts)
+                    }
+                rs <- runReaderT (mapM checkFile files) opts'
                 -- TODO: short-circuit with Control.Monad.Loops?
                 case resultsAnd rs of
                     Satisfied ->

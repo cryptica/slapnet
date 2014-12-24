@@ -10,6 +10,8 @@ import Data.SBV
 import qualified Data.Map as M
 
 import Util
+import Options
+import Control.Monad.IO.Class
 
 type ConstraintProblem a b =
         (String, String, [String], (String -> SBV a) -> SBool, (String -> a) -> b)
@@ -26,20 +28,21 @@ symConstraints vars constraint = do
         syms <- mapM exists vars
         return $ constraint $ val $ M.fromList $ vars `zip` syms
 
-checkSat :: (SatModel a, SymWord a, Show a, Show b) => Int ->
-        ConstraintProblem a b -> IO (Maybe b)
-checkSat verbosity (problemName, resultName, vars, constraint, interpretation) = do
-        verbosePut verbosity 1 $ "Checking SAT of " ++ problemName
-        result <- satWith z3{verbose=verbosity >= 4} $
-                    symConstraints vars constraint
+checkSat :: (SatModel a, SymWord a, Show a, Show b) =>
+        ConstraintProblem a b -> OptIO (Maybe b)
+checkSat (problemName, resultName, vars, constraint, interpretation) = do
+        verbosePut 1 $ "Checking SAT of " ++ problemName
+        verbosity <- opt optVerbosity
+        result <- liftIO (satWith z3{verbose=verbosity >= 4}
+                    (symConstraints vars constraint))
         case rebuildModel vars (getModel result) of
             Nothing -> do
-                verbosePut verbosity 2 "- unsat"
+                verbosePut 2 "- unsat"
                 return Nothing
             Just rawModel -> do
-                verbosePut verbosity 2 "- sat"
+                verbosePut 2 "- sat"
                 let model = interpretation $ val rawModel
-                verbosePut verbosity 3 $ "- " ++ resultName ++ ": " ++ show model
-                verbosePut verbosity 4 $ "- raw model: " ++ show rawModel
+                verbosePut 3 $ "- " ++ resultName ++ ": " ++ show model
+                verbosePut 4 $ "- raw model: " ++ show rawModel
                 return $ Just model
 
