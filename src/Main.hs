@@ -304,12 +304,16 @@ checkLivenessProperty' net f cuts = do
 findLivenessRefinement :: PetriNet -> FiringVector ->
         OptIO (Maybe Cut)
 findLivenessRefinement net x = do
-        --r1 <- findLivenessRefinementByEmptyTraps net (initialMarking net) x []
-        r1 <- findLivenessRefinementBySComponent net x
-        case r1 of
-            Nothing -> findLivenessRefinementByEmptyTraps net
-                                              (initialMarking net) x []
-            Just _ -> return r1
+        refinementType <- opt optRefinementType
+        case refinementType of
+            TrapRefinement ->
+                findLivenessRefinementByEmptyTraps net (initialMarking net) x []
+            SComponentRefinement -> do
+                r1 <- findLivenessRefinementBySComponent net x
+                case r1 of
+                    Nothing -> findLivenessRefinementByEmptyTraps net
+                                                      (initialMarking net) x []
+                    Just _ -> return r1
 
 findLivenessRefinementBySComponent :: PetriNet -> FiringVector ->
         OptIO (Maybe Cut)

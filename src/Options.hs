@@ -1,7 +1,7 @@
 {-# LANGUAGE TupleSections #-}
 
 module Options
-    (InputFormat(..),OutputFormat(..),NetTransformation(..),
+    (InputFormat(..),OutputFormat(..),NetTransformation(..),RefinementType(..),
      ImplicitProperty(..),Options(..),startOptions,options,parseArgs,
      usageInformation)
 where
@@ -33,6 +33,9 @@ data ImplicitProperty = Termination
                       | StructCommunicationFree
                       deriving (Show,Read)
 
+data RefinementType = TrapRefinement | SComponentRefinement
+                    deriving (Show,Read)
+
 data Options = Options { inputFormat :: InputFormat
                        , optVerbosity :: Int
                        , optShowHelp :: Bool
@@ -40,6 +43,7 @@ data Options = Options { inputFormat :: InputFormat
                        , optProperties :: [ImplicitProperty]
                        , optTransformations :: [NetTransformation]
                        , optRefine :: Bool
+                       , optRefinementType :: RefinementType
                        , optInvariant :: Bool
                        , optOutput :: Maybe String
                        , outputFormat :: OutputFormat
@@ -55,6 +59,7 @@ startOptions = Options { inputFormat = PNET
                        , optProperties = []
                        , optTransformations = []
                        , optRefine = True
+                       , optRefinementType = TrapRefinement
                        , optInvariant = False
                        , optOutput = Nothing
                        , outputFormat = OutLOLA
@@ -170,9 +175,13 @@ options =
         (NoArg (\opt -> Right opt { optRefine = False }))
         "Don't use refinement"
 
-        , Option "i" ["invariant"]
-        (NoArg (\opt -> Right opt { optInvariant = True }))
-        "Try to generate an invariant"
+        , Option "" ["trap-refinement"]
+        (NoArg (\opt -> Right opt { optRefinementType = TrapRefinement }))
+        "Only use empty trap refinement for liveness properties"
+
+        , Option "" ["scomponent-refinement"]
+        (NoArg (\opt -> Right opt { optRefinementType = SComponentRefinement }))
+        "Use S-component refinement before trap refinement"
 
         , Option "o" ["output"]
         (ReqArg (\arg opt -> Right opt {
