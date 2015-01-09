@@ -171,6 +171,10 @@ options =
                }))
         "Prove that the net is communication-free"
 
+        , Option "i" ["invariant"]
+        (NoArg (\opt -> Right opt { optInvariant = True }))
+        "Generate an invariant"
+
         , Option "n" ["no-refinement"]
         (NoArg (\opt -> Right opt { optRefine = False }))
         "Don't use refinement"
