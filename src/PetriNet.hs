@@ -178,14 +178,24 @@ makePetriNetFromStrings name places transitions arcs initial gs =
         where
             placeSet = S.fromList places
             transitionSet = S.fromList transitions
-            toEitherArc (l,r,w)
-                | l `S.member` placeSet && r `S.member` transitionSet =
-                        Right (Place l, Transition r, w)
-            toEitherArc (l,r,w)
-                | l `S.member` transitionSet && r `S.member` placeSet =
-                        Left (Transition l, Place r, w)
-            toEitherArc (l,r,_) = error $ "nodes " ++ l ++ " and " ++ r ++
-                                                " both places or transitions"
+            toEitherArc (l,r,w) =
+                let lp = l `S.member` placeSet
+                    lt = l `S.member` transitionSet
+                    rp = r `S.member` placeSet
+                    rt = r `S.member` transitionSet
+                in  case (lp,lt,rp,rt) of
+                        (True,False,False,True) ->
+                            Right (Place l, Transition r, w)
+                        (False,True,True,False) ->
+                            Left (Transition l, Place r, w)
+                        (False,False,_,_) ->
+                            error $ l ++ " not a declared place or transition "
+                        (_,_,False,False) ->
+                            error $ r ++ " not a declared place or transition "
+                        (True,_,True,_) ->
+                            error $ l ++ " and " ++ r ++ " both places"
+                        (_,True,_,True) ->
+                            error $ l ++ " and " ++ r ++ " both transitions"
 
 makePetriNetWithTrans :: String -> [Place] ->
         [(Transition, ([(Place, Integer)], [(Place, Integer)]))] ->
