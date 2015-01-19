@@ -59,7 +59,7 @@ startOptions = Options { inputFormat = PNET
                        , optProperties = []
                        , optTransformations = []
                        , optRefine = True
-                       , optRefinementType = TrapRefinement
+                       , optRefinementType = SComponentRefinement
                        , optInvariant = False
                        , optOutput = Nothing
                        , outputFormat = OutLOLA
