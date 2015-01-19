@@ -3,9 +3,7 @@
 library("data.table")
 library("Hmisc")
 
-#folders <- c("LeaderElectionCR79", "LeaderElectionDKR82")
-#folders <- c("LeaderElectionCR79")
-folders <- c("Snapshot")
+folders, <-, c("Lamport", "Dijkstra", "Peterson", "Szymanski", "LeaderElectionDKR82", "LeaderElectionCR79", "Snapshot")
 
 for (folder in folders) {
     infile <- paste(folder, "benchmark.out", sep="/")
