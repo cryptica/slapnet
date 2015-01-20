@@ -100,12 +100,11 @@ instance Show PetriNet where
 
 -- TODO: better cuts, scc, min cut?
 constructCut:: PetriNet -> FiringVector -> [Trap] -> Cut
-constructCut net _ traps =
-            uniqueCut (map trapComponent traps, concatMap trapOutput traps)
-        where trapComponent trap =
-                  (trap, mpre net trap)
+constructCut net _ traps = (trapComponents, trapOutputs)
+        where trapComponent trap = (sort trap, sort (mpre net trap) \\ trapOutputs)
+              trapComponents = listSet $ map trapComponent traps
               trapOutput trap = mpost net trap \\ mpre net trap
-              uniqueCut (ts, u) = (listSet (map (sort *** sort) ts), listSet u)
+              trapOutputs = listSet $ concatMap trapOutput traps
 
 renamePlace :: (String -> String) -> Place -> Place
 renamePlace f (Place p) = Place (f p)
