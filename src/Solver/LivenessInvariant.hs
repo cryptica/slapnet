@@ -48,15 +48,32 @@ placeName n p = n ++ "@p" ++ show p
 
 generateCuts :: Formula Transition -> [Cut] -> [NamedCut]
 generateCuts f cuts =
-            zipWith nameCut
-                (numPref "@r")
-                (foldl combine [formulaToCut f] (map cutToSimpleDNFCuts cuts))
+        let dnfCuts = foldl combine [formulaToCut f] (map cutToSimpleDNFCuts cuts)
+        in  zipWith nameCut (numPref "@r") $ removeWith isMoreGeneralCut dnfCuts
         where
             nameCut n (c0, cs) = (n, (c0, numPref "@comp" `zip` cs))
             combine cs1 cs2 = concat [ combineCuts c1 c2 | c1 <- cs1, c2 <- cs2 ]
 
+removeWith :: (a -> a -> Bool) -> [a] -> [a]
+removeWith f = removeCuts' []
+        where
+            removeCuts' acc [] = reverse acc
+            removeCuts' acc (x:xs) = removeCuts' (x : cutFilter x acc) (cutFilter x xs)
+            cutFilter cut = filter (not . f cut)
+
 combineCuts :: SimpleCut -> SimpleCut -> [SimpleCut]
-combineCuts (c1c0, c1cs) (c2c0, c2cs) = [(c1c0 `S.union` c2c0, c1cs ++ c2cs)]
+combineCuts (c1c0, c1cs) (c2c0, c2cs) =
+        let remove b a = a `S.difference` b
+            c0 = c1c0 `S.union` c2c0
+            cs = removeWith S.isSubsetOf $ map (remove c0) $ c1cs ++ c2cs
+        in  if any S.null cs then
+                []
+            else
+                [(c0, cs)]
+
+isMoreGeneralCut :: SimpleCut -> SimpleCut -> Bool
+isMoreGeneralCut (c1c0, c1cs) (c2c0, c2cs) =
+        c1c0 `S.isSubsetOf` c2c0 && all (\c1 -> any (`S.isSubsetOf` c1) c2cs) c1cs
 
 varNames :: PetriNet -> [NamedCut] -> [String]
 varNames net = concatMap cutNames
@@ -71,6 +88,9 @@ cutToSimpleDNFCuts (ts, u) = (S.empty, [S.fromList u]) : map (\(_, t) -> (S.from
 
 cutToSimpleCNFCut :: Cut -> SimpleCut
 cutToSimpleCNFCut (ts, u) = (S.fromList u, map (\(_, t) -> S.fromList t) ts)
+
+toSimpleCut :: NamedCut -> SimpleCut
+toSimpleCut (_, (c0, ncs)) = (c0, map snd ncs)
 
 formulaToCut :: Formula Transition -> SimpleCut
 formulaToCut = transformF
@@ -137,8 +157,8 @@ getLivenessInvariant :: PetriNet -> [Cut] -> [NamedCut] -> IMap String ->
         [LivenessInvariant]
 getLivenessInvariant net cuts namedCuts y =
             map rankCut namedCuts ++ zipWith compCut (numPref "@cut") cuts
-        where rankCut (n, (c0, cs)) = RankingFunction
-                (n, (c0, map snd cs),
+        where rankCut cut@(n, _) = RankingFunction
+                (n, toSimpleCut cut,
                  buildVector (map (\p -> (p, val y (placeName n p))) (places net)))
               compCut n c = ComponentCut
                 (n, cutToSimpleCNFCut c, map fst (fst c))
