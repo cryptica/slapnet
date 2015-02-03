@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
 
 module Solver
-    (prime,checkSat,val,vals,positiveVal,zeroVal,
+    (prime,checkSat,checkSatMin,val,vals,positiveVal,zeroVal,
      getNames,
      ConstraintProblem)
 where
@@ -12,6 +12,7 @@ import qualified Data.Map as M
 import Util
 import Options
 import Control.Monad.IO.Class
+import Control.Applicative
 
 type ConstraintProblem a b =
         (String, String, [String], (String -> SBV a) -> SBool, (String -> a) -> b)
@@ -45,4 +46,23 @@ checkSat (problemName, resultName, vars, constraint, interpretation) = do
                 verbosePut 3 $ "- " ++ resultName ++ ": " ++ show model
                 verbosePut 4 $ "- raw model: " ++ show rawModel
                 return $ Just model
+
+checkSatMin :: (SatModel a, SymWord a, Show a, Show b) =>
+        (Maybe Integer -> ConstraintProblem a (b, Integer)) -> OptIO (Maybe b)
+checkSatMin minProblem = do
+        optMin <- opt optMinimizeRefinement
+        r0 <- checkSat $ minProblem Nothing
+        case r0 of
+            Nothing -> return Nothing
+            Just (result, size) ->
+                if optMin then
+                    Just <$> findSmaller result size
+                else
+                    return $ Just result
+    where findSmaller result size = do
+            verbosePut 2 $ "Checking for size smaller than " ++ show size
+            r1 <- checkSat $ minProblem (Just size)
+            case r1 of
+                Nothing -> return result
+                Just (result', size') -> findSmaller result' size'
 

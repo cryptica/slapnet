@@ -45,6 +45,7 @@ data Options = Options { inputFormat :: InputFormat
                        , optRefine :: Bool
                        , optSimpFormula :: Bool
                        , optRefinementType :: RefinementType
+                       , optMinimizeRefinement :: Bool
                        , optInvariant :: Bool
                        , optOutput :: Maybe String
                        , outputFormat :: OutputFormat
@@ -62,6 +63,7 @@ startOptions = Options { inputFormat = PNET
                        , optRefine = True
                        , optSimpFormula = True
                        , optRefinementType = SComponentRefinement
+                       , optMinimizeRefinement = False
                        , optInvariant = False
                        , optOutput = Nothing
                        , outputFormat = OutLOLA
@@ -223,6 +225,12 @@ options =
                    optSimpFormula = False
                }))
         "Do not simplify formula for invariant generation"
+
+        , Option "" ["minimize-refinement"]
+        (NoArg (\opt -> Right opt {
+                   optMinimizeRefinement = True
+               }))
+        "Minimize size of refinement structure (trap/s-component)"
 
         , Option "v" ["verbose"]
         (NoArg (\opt -> Right opt { optVerbosity = optVerbosity opt + 1 }))

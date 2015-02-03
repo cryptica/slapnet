@@ -271,20 +271,20 @@ refineSafetyProperty net f traps m = do
 checkLivenessProperty :: PetriNet ->
         Formula Transition -> OptIO PropResult
 checkLivenessProperty net f = do
-        r <- checkLivenessProperty' net f []
+        (r, cuts) <- checkLivenessProperty' net f []
+        verbosePut 2 $ "Number of refinements: " ++ show (length cuts)
         case r of
-            (Nothing, cuts) -> do
+            Nothing -> do
                 invariant <- opt optInvariant
                 if invariant then
                     getLivenessInvariant net f cuts >>= printInvariant
                 else
                     return Satisfied
-            (Just _, _) ->
+            Just _ ->
                 return Unknown
 
 getLivenessInvariant :: PetriNet -> Formula Transition -> [Cut] -> OptIO (Maybe [LivenessInvariant])
 getLivenessInvariant net f cuts = do
-        verbosePut 2 $ "Number of cuts: " ++ show (length cuts)
         simp <- opt optSimpFormula
         let dnfCuts = generateCuts f cuts
         verbosePut 2 $ "Number of disjuncts: " ++ show (length dnfCuts)
@@ -329,12 +329,12 @@ findLivenessRefinement net x = do
 findLivenessRefinementBySComponent :: PetriNet -> FiringVector ->
         OptIO (Maybe Cut)
 findLivenessRefinementBySComponent net x =
-        checkSat $ checkSComponentSat net x
+        checkSatMin $ checkSComponentSat net x
 
 findLivenessRefinementByEmptyTraps :: PetriNet -> Marking -> FiringVector ->
         [Trap] -> OptIO (Maybe Cut)
 findLivenessRefinementByEmptyTraps net m x traps = do
-        r <- checkSat $ checkSubnetEmptyTrapSat net m x
+        r <- checkSatMin $ checkSubnetEmptyTrapSat net m x
         case r of
             Nothing -> do
                 rm <- refineSafetyProperty net FTrue traps m

@@ -20,13 +20,13 @@ data LivenessInvariant =
             RankingFunction (SimpleCut, Vector Place)
           | ComponentCut (SimpleCut, [Trap])
 
-showSimpleCuts :: SimpleCut -> Bool -> String
-showSimpleCuts cs inv = intercalate " ∧ " (showSimpleCut cs)
+showSimpleCuts :: SimpleCut -> String
+showSimpleCuts cs = intercalate " ∧ " (showSimpleCut cs)
         where showSimpleCut (ts0, cs1) =
                 if S.null ts0 then
-                    map (showTrans inv) cs1
+                    map (showTrans True) cs1
                 else
-                    showTrans (not inv) ts0 : map (showTrans inv) cs1
+                    showTrans False ts0 : map (showTrans True) cs1
               showTrans pos ts =
                   if pos then
                        let d = intercalate " ∨ "
@@ -37,10 +37,10 @@ showSimpleCuts cs inv = intercalate " ∧ " (showSimpleCut cs)
 
 instance Show LivenessInvariant where
         show (RankingFunction (cs, xs)) =
-                    "[" ++ showSimpleCuts cs True ++ "]: " ++
+                    "[" ++ showSimpleCuts cs ++ "]: " ++
                     intercalate " + " (map showWeighted (items xs))
         show (ComponentCut (cs, ps)) =
-                    "[" ++ showSimpleCuts cs False ++ "]: " ++
+                    "[" ++ showSimpleCuts cs ++ "]: " ++
                     show ps
 
 type SimpleCut = (S.Set Transition, [S.Set Transition])

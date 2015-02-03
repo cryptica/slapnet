@@ -65,35 +65,41 @@ checkBinary p' t' y =
             checkBins y
         where checkBins xs = bAnd $ map (\x -> x .== 0 ||| x .== 1) $ vals xs
 
-checkSComponent :: PetriNet -> FiringVector -> SIMap Place ->
+checkSizeLimit :: SIMap Place -> SIMap Transition -> Maybe Integer -> SBool
+checkSizeLimit _ _ Nothing = true
+checkSizeLimit p' _ (Just size) = (.< literal size) $ sumVal p'
+
+checkSComponent :: PetriNet -> FiringVector -> Maybe Integer -> SIMap Place ->
         SIMap Transition -> SIMap Transition -> SBool
-checkSComponent net x p' t' y =
+checkSComponent net x sizeLimit p' t' y =
         checkPrePostPlaces net p' t' &&&
         checkPrePostTransitions net p' t' &&&
         checkSubsetTransitions x t' y &&&
         checkNotEmpty y &&&
+        checkSizeLimit p' t' sizeLimit &&&
         checkClosed net x p' y &&&
         checkTokens net p' &&&
         checkBinary p' t' y
 
-checkSComponentSat :: PetriNet -> FiringVector ->
-        ConstraintProblem Integer Cut
-checkSComponentSat net x =
+checkSComponentSat :: PetriNet -> FiringVector -> Maybe Integer ->
+        ConstraintProblem Integer (Cut, Integer)
+checkSComponentSat net x sizeLimit =
         let fired = elems x
             p' = makeVarMap $ places net
             t' = makeVarMap $ transitions net
             y = makeVarMapWith prime fired
         in  ("S-component constraints", "cut",
             getNames p' ++ getNames t' ++ getNames y,
-            \fm -> checkSComponent net x (fmap fm p') (fmap fm t') (fmap fm y),
+            \fm -> checkSComponent net x sizeLimit (fmap fm p') (fmap fm t') (fmap fm y),
             \fm -> cutFromAssignment net x (fmap fm p') (fmap fm t') (fmap fm y))
 
 cutFromAssignment :: PetriNet -> FiringVector -> IMap Place ->
-        IMap Transition -> IMap Transition -> Cut
+        IMap Transition -> IMap Transition -> (Cut, Integer)
 cutFromAssignment net x p' t' y =
         let ts = filter (\t -> val x t > 0) $ elems $ M.filter (> 0) t'
             (t1, t2) = partition (\t -> val y t > 0) ts
             s1 = filter (\p -> val p' p > 0) $ mpre net t1
             s2 = filter (\p -> val p' p > 0) $ mpre net t2
-        in  constructCut net x [s1,s2]
+            size = fromIntegral $ M.size $ M.filter (> 0) p'
+        in  (constructCut net x [s1,s2], size)
 
