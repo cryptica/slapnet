@@ -275,13 +275,24 @@ checkLivenessProperty net f = do
         case r of
             (Nothing, cuts) -> do
                 invariant <- opt optInvariant
-                if invariant then do
-                    r' <- checkSat $ checkLivenessInvariantSat net f cuts
-                    printInvariant r'
+                if invariant then
+                    getLivenessInvariant net f cuts >>= printInvariant
                 else
                     return Satisfied
             (Just _, _) ->
                 return Unknown
+
+getLivenessInvariant :: PetriNet -> Formula Transition -> [Cut] -> OptIO (Maybe [LivenessInvariant])
+getLivenessInvariant net f cuts = do
+        verbosePut 2 $ "Number of cuts: " ++ show (length cuts)
+        simp <- opt optSimpFormula
+        let dnfCuts = generateCuts f cuts
+        verbosePut 2 $ "Number of disjuncts: " ++ show (length dnfCuts)
+        let simpCuts = if simp then simplifyCuts dnfCuts else dnfCuts
+        verbosePut 2 $ "Number of simplified disjuncts: " ++ show (length simpCuts)
+        rs <- mapM (checkSat . checkLivenessInvariantSat net) simpCuts
+        let added = map (Just . cutToLivenessInvariant) cuts
+        return $ sequence (rs ++ added)
 
 checkLivenessProperty' :: PetriNet ->
         Formula Transition -> [Cut] -> OptIO (Maybe FiringVector, [Cut])

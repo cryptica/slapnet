@@ -43,6 +43,7 @@ data Options = Options { inputFormat :: InputFormat
                        , optProperties :: [ImplicitProperty]
                        , optTransformations :: [NetTransformation]
                        , optRefine :: Bool
+                       , optSimpFormula :: Bool
                        , optRefinementType :: RefinementType
                        , optInvariant :: Bool
                        , optOutput :: Maybe String
@@ -59,6 +60,7 @@ startOptions = Options { inputFormat = PNET
                        , optProperties = []
                        , optTransformations = []
                        , optRefine = True
+                       , optSimpFormula = True
                        , optRefinementType = SComponentRefinement
                        , optInvariant = False
                        , optOutput = Nothing
@@ -215,6 +217,12 @@ options =
                    optUseProperties = False
                }))
         "Do not use the properties given in the input file"
+
+        , Option "" ["no-simp"]
+        (NoArg (\opt -> Right opt {
+                   optSimpFormula = False
+               }))
+        "Do not simplify formula for invariant generation"
 
         , Option "v" ["verbose"]
         (NoArg (\opt -> Right opt { optVerbosity = optVerbosity opt + 1 }))

@@ -1,6 +1,9 @@
 module Solver.LivenessInvariant (
     checkLivenessInvariantSat
   , LivenessInvariant
+  , generateCuts
+  , simplifyCuts
+  , cutToLivenessInvariant
 ) where
 
 import Data.SBV
@@ -14,8 +17,8 @@ import PetriNet
 import qualified Data.Set as S
 
 data LivenessInvariant =
-            RankingFunction (String, SimpleCut, Vector Place)
-          | ComponentCut (String, SimpleCut, [Trap])
+            RankingFunction (SimpleCut, Vector Place)
+          | ComponentCut (SimpleCut, [Trap])
 
 showSimpleCuts :: SimpleCut -> Bool -> String
 showSimpleCuts cs inv = intercalate " ∧ " (showSimpleCut cs)
@@ -33,26 +36,40 @@ showSimpleCuts cs inv = intercalate " ∧ " (showSimpleCut cs)
                        intercalate " ∧ " (map (\t -> show t ++ " ∉ σ") (S.toList ts))
 
 instance Show LivenessInvariant where
-        show (RankingFunction (n, cs, xs)) = n ++
-                    " [" ++ showSimpleCuts cs True ++ "]: " ++
+        show (RankingFunction (cs, xs)) =
+                    "[" ++ showSimpleCuts cs True ++ "]: " ++
                     intercalate " + " (map showWeighted (items xs))
-        show (ComponentCut (n, cs, ps)) = n ++
-                    " [" ++ showSimpleCuts cs False ++ "]: " ++
+        show (ComponentCut (cs, ps)) =
+                    "[" ++ showSimpleCuts cs False ++ "]: " ++
                     show ps
 
 type SimpleCut = (S.Set Transition, [S.Set Transition])
-type NamedCut = (String, (S.Set Transition, [(String, S.Set Transition)]))
+type NamedCut = (S.Set Transition, [(String, S.Set Transition)])
 
-placeName :: String -> Place -> String
-placeName n p = n ++ "@p" ++ show p
+placeName :: Place -> String
+placeName p = "@p" ++ show p
 
-generateCuts :: Formula Transition -> [Cut] -> [NamedCut]
+generateCuts :: Formula Transition -> [Cut] -> [SimpleCut]
 generateCuts f cuts =
-        let dnfCuts = foldl combine [formulaToCut f] (map cutToSimpleDNFCuts cuts)
-        in  zipWith nameCut (numPref "@r") $ removeWith isMoreGeneralCut dnfCuts
+            foldl combine [formulaToCut f] (map cutToSimpleDNFCuts cuts)
         where
-            nameCut n (c0, cs) = (n, (c0, numPref "@comp" `zip` cs))
-            combine cs1 cs2 = concat [ combineCuts c1 c2 | c1 <- cs1, c2 <- cs2 ]
+            combine cs1 cs2 = [ (c1c0 `S.union` c2c0, c1cs ++ c2cs)
+                              | (c1c0, c1cs) <- cs1, (c2c0, c2cs) <- cs2 ]
+
+simplifyCuts :: [SimpleCut] -> [SimpleCut]
+simplifyCuts = removeWith isMoreGeneralCut . concatMap simplifyCut
+
+simplifyCut :: SimpleCut -> [SimpleCut]
+simplifyCut (c0, cs) =
+        let remove b a = a `S.difference` b
+            cs' = removeWith S.isSubsetOf $ map (remove c0) cs
+        in  if any S.null cs' then
+                []
+            else
+                [(c0, cs')]
+
+nameCut :: SimpleCut -> NamedCut
+nameCut (c0, cs) = (c0, numPref "@comp" `zip` cs)
 
 removeWith :: (a -> a -> Bool) -> [a] -> [a]
 removeWith f = removeCuts' []
@@ -61,27 +78,15 @@ removeWith f = removeCuts' []
             removeCuts' acc (x:xs) = removeCuts' (x : cutFilter x acc) (cutFilter x xs)
             cutFilter cut = filter (not . f cut)
 
-combineCuts :: SimpleCut -> SimpleCut -> [SimpleCut]
-combineCuts (c1c0, c1cs) (c2c0, c2cs) =
-        let remove b a = a `S.difference` b
-            c0 = c1c0 `S.union` c2c0
-            cs = removeWith S.isSubsetOf $ map (remove c0) $ c1cs ++ c2cs
-        in  if any S.null cs then
-                []
-            else
-                [(c0, cs)]
-
 isMoreGeneralCut :: SimpleCut -> SimpleCut -> Bool
 isMoreGeneralCut (c1c0, c1cs) (c2c0, c2cs) =
         c1c0 `S.isSubsetOf` c2c0 && all (\c1 -> any (`S.isSubsetOf` c1) c2cs) c1cs
 
-varNames :: PetriNet -> [NamedCut] -> [String]
-varNames net = concatMap cutNames
-        where
-            cutNames (n, (_, c)) =
-                [n ++ "@yone"] ++ [n ++ "@comp0"] ++
-                map (placeName n) (places net) ++
-                map (\(n', _) -> n ++ n') c
+cutNames :: PetriNet -> NamedCut -> [String]
+cutNames net (_, c) =
+        ["@yone", "@comp0"] ++
+        map placeName (places net) ++
+        map fst c
 
 cutToSimpleDNFCuts :: Cut -> [SimpleCut]
 cutToSimpleDNFCuts (ts, u) = (S.empty, [S.fromList u]) : map (\(_, t) -> (S.fromList t, [])) ts
@@ -90,7 +95,7 @@ cutToSimpleCNFCut :: Cut -> SimpleCut
 cutToSimpleCNFCut (ts, u) = (S.fromList u, map (\(_, t) -> S.fromList t) ts)
 
 toSimpleCut :: NamedCut -> SimpleCut
-toSimpleCut (_, (c0, ncs)) = (c0, map snd ncs)
+toSimpleCut (c0, ncs) = (c0, map snd ncs)
 
 formulaToCut :: Formula Transition -> SimpleCut
 formulaToCut = transformF
@@ -117,50 +122,43 @@ formulaToCut = transformF
             transformTerm t =
                 error $ "term not supported for invariant: " ++ show t
 
-checkCut :: PetriNet -> SIMap String -> NamedCut -> SBool
-checkCut net m (n, (comp0, comps)) =
+checkLivenessInvariant :: PetriNet -> NamedCut -> SIMap String -> SBool
+checkLivenessInvariant net (comp0, comps) m =
             bAnd (map checkTransition (transitions net)) &&&
-            val m (n ++ "@yone") + sum (map addComp comps) .> 0 &&&
-            bAnd (map (checkNonNegativity . placeName n) (places net)) &&&
-            checkNonNegativity (n ++ "@yone") &&&
-            checkNonNegativity (n ++ "@comp0") &&&
-            bAnd (map (\(n', _) -> checkNonNegativity (n ++ n')) comps)
+            val m "@yone" + sum (map addComp comps) .> 0 &&&
+            bAnd (map (checkNonNegativity . placeName) (places net)) &&&
+            checkNonNegativity "@yone" &&&
+            checkNonNegativity "@comp0" &&&
+            bAnd (map (\(n, _) -> checkNonNegativity n) comps)
         where checkTransition t =
                 let incoming = map addPlace $ lpre net t
                     outgoing = map addPlace $ lpost net t
-                    yone = val m (n ++ "@yone")
-                    addCompT (n', ts) = if t `S.member` ts then val m (n ++ n') else 0
+                    yone = val m "@yone"
+                    addCompT (n, ts) = if t `S.member` ts then val m n else 0
                     comp0Val = addCompT ("@comp0", comp0)
                     compsVal = sum $ map addCompT comps
                 in  sum outgoing - sum incoming + yone + compsVal .<= comp0Val
-              addPlace (p,w) = literal w * val m (placeName n p)
-              addComp (n', _) = val m (n ++ n')
+              addPlace (p,w) = literal w * val m (placeName p)
+              addComp (n, _) = val m n
               checkNonNegativity x = val m x .>= 0
 
-checkLivenessInvariant :: PetriNet -> [NamedCut] -> SIMap String -> SBool
-checkLivenessInvariant net cuts m =
-        bAnd (map (checkCut net m) cuts)
-
--- TODO: split up into many smaller sat problems
-checkLivenessInvariantSat :: PetriNet -> Formula Transition -> [Cut] ->
-        ConstraintProblem Integer [LivenessInvariant]
-checkLivenessInvariantSat net f cuts =
-        let namedCuts = generateCuts f cuts
-            names = varNames net namedCuts
+checkLivenessInvariantSat :: PetriNet -> SimpleCut -> ConstraintProblem Integer LivenessInvariant
+checkLivenessInvariantSat net cut =
+        let namedCut = nameCut cut
+            names = cutNames net namedCut
             myVarMap fvm = M.fromList $ names `zip` fmap fvm names
         in  ("liveness invariant constraints", "liveness invariant",
              names,
-             checkLivenessInvariant net namedCuts . myVarMap,
-             getLivenessInvariant net cuts namedCuts . myVarMap)
+             checkLivenessInvariant net namedCut . myVarMap,
+             getLivenessInvariant net namedCut . myVarMap)
 
-getLivenessInvariant :: PetriNet -> [Cut] -> [NamedCut] -> IMap String ->
-        [LivenessInvariant]
-getLivenessInvariant net cuts namedCuts y =
-            map rankCut namedCuts ++ zipWith compCut (numPref "@cut") cuts
-        where rankCut cut@(n, _) = RankingFunction
-                (n, toSimpleCut cut,
-                 buildVector (map (\p -> (p, val y (placeName n p))) (places net)))
-              compCut n c = ComponentCut
-                (n, cutToSimpleCNFCut c, map fst (fst c))
+cutToLivenessInvariant :: Cut -> LivenessInvariant
+cutToLivenessInvariant c = ComponentCut (cutToSimpleCNFCut c, map fst (fst c))
+
+getLivenessInvariant :: PetriNet -> NamedCut -> IMap String -> LivenessInvariant
+getLivenessInvariant net cut y =
+        RankingFunction
+                (toSimpleCut cut,
+                 buildVector (map (\p -> (p, val y (placeName p))) (places net)))
 
 
