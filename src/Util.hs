@@ -15,6 +15,7 @@ import Data.List
 import Data.Ord
 import Data.Function
 import Control.Monad.Reader
+import System.IO
 
 import Options
 
@@ -109,6 +110,7 @@ verbosePut ::  Int -> String -> OptIO ()
 verbosePut level str = do
         verbosity <- opt optVerbosity
         when (verbosity >= level) (putLine str)
+        liftIO $ hFlush stdout -- TODO: remove again
 
 putLine :: String -> OptIO ()
 putLine = liftIO . putStrLn

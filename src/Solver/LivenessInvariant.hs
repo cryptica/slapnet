@@ -4,17 +4,18 @@ module Solver.LivenessInvariant (
   , generateCuts
   , simplifyCuts
   , cutToLivenessInvariant
+  , SimpleCut
 ) where
 
 import Data.SBV
 import Data.List (intercalate)
 import qualified Data.Map as M
+import qualified Data.Set as S
 
 import Util
 import Solver
 import Property
 import PetriNet
-import qualified Data.Set as S
 
 data LivenessInvariant =
             RankingFunction (SimpleCut, Vector Place)
@@ -160,5 +161,3 @@ getLivenessInvariant net cut y =
         RankingFunction
                 (toSimpleCut cut,
                  buildVector (map (\p -> (p, val y (placeName p))) (places net)))
-
-

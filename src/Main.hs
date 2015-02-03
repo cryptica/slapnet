@@ -31,6 +31,7 @@ import Solver.SubnetEmptyTrap
 import Solver.LivenessInvariant
 import Solver.SafetyInvariant
 import Solver.SComponent
+import Solver.Simplifier
 --import Solver.CommFreeReachability
 
 
@@ -288,11 +289,30 @@ getLivenessInvariant net f cuts = do
         simp <- opt optSimpFormula
         let dnfCuts = generateCuts f cuts
         verbosePut 2 $ "Number of disjuncts: " ++ show (length dnfCuts)
+--        let simpCuts = if simp then simplifyCuts dnfCuts else dnfCuts
         let simpCuts = if simp then simplifyCuts dnfCuts else dnfCuts
-        verbosePut 2 $ "Number of simplified disjuncts: " ++ show (length simpCuts)
-        rs <- mapM (checkSat . checkLivenessInvariantSat net) simpCuts
+        verbosePut 2 $ "Number of simplified disjuncts (1): " ++ show (length simpCuts)
+        simpCuts' <- if simp then simplifyBySubsumption net [] simpCuts else return simpCuts
+        verbosePut 2 $ "Number of simplified disjuncts (2): " ++ show (length simpCuts')
+        rs <- mapM (checkSat . checkLivenessInvariantSat net) simpCuts'
         let added = map (Just . cutToLivenessInvariant) cuts
         return $ sequence (rs ++ added)
+
+simplifyBySubsumption :: PetriNet -> [SimpleCut] -> [SimpleCut] -> OptIO [SimpleCut]
+simplifyBySubsumption _ acc [] = return $ reverse acc
+simplifyBySubsumption net acc (c0:cs) = do
+        r <- checkSat $ checkSubsumptionSat net c0 (acc ++ cs)
+        let acc' = case r of
+                    Nothing -> acc
+                    Just _ -> c0:acc
+        simplifyBySubsumption net acc' cs
+
+removeWith :: (a -> a -> Bool) -> [a] -> [a]
+removeWith f = removeCuts' []
+        where
+            removeCuts' acc [] = reverse acc
+            removeCuts' acc (x:xs) = removeCuts' (x : cutFilter x acc) (cutFilter x xs)
+            cutFilter cut = filter (not . f cut)
 
 checkLivenessProperty' :: PetriNet ->
         Formula Transition -> [Cut] -> OptIO (Maybe FiringVector, [Cut])
