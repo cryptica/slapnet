@@ -1,5 +1,8 @@
 module Solver.TransitionInvariant
-    (checkTransitionInvariantSat)
+    (checkTransitionInvariantSat
+    ,checkTransitionInvariant
+    ,tInvariantConstraints
+    ,nonnegativityConstraints)
 where
 
 import Data.SBV
@@ -32,12 +35,16 @@ checkCuts cuts x = bAnd $ map checkCut cuts
                       cPost = map (positiveVal x) u
                   in  bAnd cPre ==> bOr cPost
 
-checkTransitionInvariant :: PetriNet -> Formula Transition ->
-        [Cut] -> SIMap Transition -> SBool
-checkTransitionInvariant net f cuts x =
+checkTransitionInvariant :: PetriNet -> SIMap Transition -> SBool
+checkTransitionInvariant net x =
         tInvariantConstraints net x &&&
         nonnegativityConstraints x &&&
-        finalInvariantConstraints x &&&
+        finalInvariantConstraints x
+
+checkTransitionInvariantMethod :: PetriNet -> Formula Transition ->
+        [Cut] -> SIMap Transition -> SBool
+checkTransitionInvariantMethod net f cuts x =
+        checkTransitionInvariant net x &&&
         checkCuts cuts x &&&
         evaluateFormula f x
 
@@ -47,7 +54,7 @@ checkTransitionInvariantSat net f cuts =
         let x = makeVarMap $ transitions net
         in  ("transition invariant constraints", "transition invariant",
             getNames x,
-            \fm -> checkTransitionInvariant net f cuts (fmap fm x),
+            \fm -> checkTransitionInvariantMethod net f cuts (fmap fm x),
             \fm -> firingVectorFromAssignment (fmap fm x))
 
 firingVectorFromAssignment :: IMap Transition -> FiringVector

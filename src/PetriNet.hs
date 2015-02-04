@@ -99,8 +99,8 @@ instance Show PetriNet where
                           show l ++ " -> " ++ show s ++ " -> " ++ show r
 
 -- TODO: better cuts, scc, min cut?
-constructCut:: PetriNet -> FiringVector -> [Trap] -> Cut
-constructCut net _ traps = (trapComponents, trapOutputs)
+constructCut:: PetriNet -> [Trap] -> Cut
+constructCut net traps = (trapComponents, trapOutputs)
         where trapComponent trap = (sort trap, sort (mpre net trap) \\ trapOutputs)
               trapComponents = listSet $ map trapComponent traps
               trapOutput trap = mpost net trap \\ mpre net trap
