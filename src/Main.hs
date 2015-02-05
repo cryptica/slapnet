@@ -360,7 +360,7 @@ findLivenessRefinementByEmptyTraps net m x traps = do
                 rm <- refineSafetyProperty net FTrue traps m
                 case rm of
                     (Nothing, _) -> do
-                        cut <- generateLivenessRefinement net traps
+                        cut <- generateLivenessRefinement net x traps
                         return $ Just cut
                     (Just _, _) ->
                         return Nothing
@@ -370,14 +370,14 @@ findLivenessRefinementByEmptyTraps net m x traps = do
                             checkSafetyProperty' net FTrue traps'
                 case rm of
                     (Nothing, _) -> do
-                        cut <- generateLivenessRefinement net traps'
+                        cut <- generateLivenessRefinement net x traps'
                         return $ Just cut
                     (Just m', _) ->
                         findLivenessRefinementByEmptyTraps net m' x traps'
 
-generateLivenessRefinement :: PetriNet -> [Trap] -> OptIO Cut
-generateLivenessRefinement net traps = do
-        let cut = constructCut net traps
+generateLivenessRefinement :: PetriNet -> FiringVector -> [Trap] -> OptIO Cut
+generateLivenessRefinement net x traps = do
+        let cut = constructCut net x traps
         verbosePut 3 $ "- cut: " ++ show cut
         return cut
 

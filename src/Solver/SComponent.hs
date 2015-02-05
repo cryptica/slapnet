@@ -101,5 +101,5 @@ cutFromAssignment net x p' t' y =
             s1 = filter (\p -> val p' p > 0) $ mpre net t1
             s2 = filter (\p -> val p' p > 0) $ mpre net t2
             size = fromIntegral $ M.size $ M.filter (> 0) p'
-        in  (constructCut net [s1,s2], size)
+        in  (constructCut net x [s1,s2], size)
 
