@@ -1,8 +1,6 @@
 module Solver.LivenessInvariant (
     checkLivenessInvariantSat
   , LivenessInvariant
-  , generateCuts
-  , simplifyCuts
   , cutToLivenessInvariant
   , SimpleCut
 ) where
@@ -14,7 +12,7 @@ import qualified Data.Set as S
 
 import Util
 import Solver
-import Property
+import Solver.Simplifier
 import PetriNet
 
 data LivenessInvariant =
@@ -44,44 +42,13 @@ instance Show LivenessInvariant where
                     "[" ++ showSimpleCuts cs ++ "]: " ++
                     show ps
 
-type SimpleCut = (S.Set Transition, [S.Set Transition])
 type NamedCut = (S.Set Transition, [(String, S.Set Transition)])
 
 placeName :: Place -> String
 placeName p = "@p" ++ show p
 
-generateCuts :: Formula Transition -> [Cut] -> [SimpleCut]
-generateCuts f cuts =
-            foldl combine [formulaToCut f] (map cutToSimpleDNFCuts cuts)
-        where
-            combine cs1 cs2 = [ (c1c0 `S.union` c2c0, c1cs ++ c2cs)
-                              | (c1c0, c1cs) <- cs1, (c2c0, c2cs) <- cs2 ]
-
-simplifyCuts :: [SimpleCut] -> [SimpleCut]
-simplifyCuts = removeWith isMoreGeneralCut . concatMap simplifyCut
-
-simplifyCut :: SimpleCut -> [SimpleCut]
-simplifyCut (c0, cs) =
-        let remove b a = a `S.difference` b
-            cs' = removeWith S.isSubsetOf $ map (remove c0) cs
-        in  if any S.null cs' then
-                []
-            else
-                [(c0, cs')]
-
 nameCut :: SimpleCut -> NamedCut
 nameCut (c0, cs) = (c0, numPref "@comp" `zip` cs)
-
-removeWith :: (a -> a -> Bool) -> [a] -> [a]
-removeWith f = removeCuts' []
-        where
-            removeCuts' acc [] = reverse acc
-            removeCuts' acc (x:xs) = removeCuts' (x : cutFilter x acc) (cutFilter x xs)
-            cutFilter cut = filter (not . f cut)
-
-isMoreGeneralCut :: SimpleCut -> SimpleCut -> Bool
-isMoreGeneralCut (c1c0, c1cs) (c2c0, c2cs) =
-        c1c0 `S.isSubsetOf` c2c0 && all (\c1 -> any (`S.isSubsetOf` c1) c2cs) c1cs
 
 cutNames :: PetriNet -> NamedCut -> [String]
 cutNames net (_, c) =
@@ -89,39 +56,11 @@ cutNames net (_, c) =
         map placeName (places net) ++
         map fst c
 
-cutToSimpleDNFCuts :: Cut -> [SimpleCut]
-cutToSimpleDNFCuts (ts, u) = (S.empty, [S.fromList u]) : map (\(_, t) -> (S.fromList t, [])) ts
-
 cutToSimpleCNFCut :: Cut -> SimpleCut
 cutToSimpleCNFCut (ts, u) = (S.fromList u, map (\(_, t) -> S.fromList t) ts)
 
 toSimpleCut :: NamedCut -> SimpleCut
 toSimpleCut (c0, ncs) = (c0, map snd ncs)
-
-formulaToCut :: Formula Transition -> SimpleCut
-formulaToCut = transformF
-        where
-            transformF FTrue = (S.empty, [])
-            transformF (p :&: q) =
-                let (p0, ps) = transformF p
-                    (q0, qs) = transformF q
-                in  (p0 `S.union` q0, ps ++ qs)
-            transformF (LinearInequation ts Gt (Const 0)) =
-                (S.empty, [transformTerm ts])
-            transformF (LinearInequation ts Ge (Const 1)) =
-                (S.empty, [transformTerm ts])
-            transformF (LinearInequation ts Eq (Const 0)) =
-                (transformTerm ts, [])
-            transformF (LinearInequation ts Le (Const 0)) =
-                (transformTerm ts, [])
-            transformF (LinearInequation ts Lt (Const 1)) =
-                (transformTerm ts, [])
-            transformF f =
-                error $ "formula not supported for invariant: " ++ show f
-            transformTerm (t :+: u) = transformTerm t `S.union` transformTerm u
-            transformTerm (Var x) = S.singleton x
-            transformTerm t =
-                error $ "term not supported for invariant: " ++ show t
 
 checkLivenessInvariant :: PetriNet -> NamedCut -> SIMap String -> SBool
 checkLivenessInvariant net (comp0, comps) m =

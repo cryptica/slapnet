@@ -15,7 +15,7 @@ where
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Control.Arrow (first,(***))
-import Data.List (sort,(\\))
+import Data.List ((\\))
 
 import Util
 

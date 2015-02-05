@@ -43,7 +43,7 @@ data Options = Options { inputFormat :: InputFormat
                        , optProperties :: [ImplicitProperty]
                        , optTransformations :: [NetTransformation]
                        , optRefine :: Bool
-                       , optSimpFormula :: Bool
+                       , optSimpFormula :: Int
                        , optRefinementType :: RefinementType
                        , optMinimizeRefinement :: Bool
                        , optInvariant :: Bool
@@ -61,7 +61,7 @@ startOptions = Options { inputFormat = PNET
                        , optProperties = []
                        , optTransformations = []
                        , optRefine = True
-                       , optSimpFormula = True
+                       , optSimpFormula = 2
                        , optRefinementType = SComponentRefinement
                        , optMinimizeRefinement = False
                        , optInvariant = False
@@ -220,11 +220,23 @@ options =
                }))
         "Do not use the properties given in the input file"
 
-        , Option "" ["no-simp"]
+        , Option "" ["simp-0"]
         (NoArg (\opt -> Right opt {
-                   optSimpFormula = False
+                   optSimpFormula = 0
                }))
         "Do not simplify formula for invariant generation"
+
+        , Option "" ["simp-1"]
+        (NoArg (\opt -> Right opt {
+                   optSimpFormula = 1
+               }))
+        "Use simplification level 1 for invariant generation"
+
+        , Option "" ["simp-2"]
+        (NoArg (\opt -> Right opt {
+                   optSimpFormula = 2
+               }))
+        "Use simplification level 2 for invariant generation"
 
         , Option "" ["minimize-refinement"]
         (NoArg (\opt -> Right opt {
