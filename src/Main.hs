@@ -32,6 +32,7 @@ import Solver.LivenessInvariant
 import Solver.SafetyInvariant
 import Solver.SComponentWithCut
 import Solver.Simplifier
+import Solver.Interpolant
 --import Solver.CommFreeReachability
 
 writeFiles :: String -> PetriNet -> [Property] -> OptIO ()
@@ -289,6 +290,11 @@ getLivenessInvariant net f cuts = do
         dnfCuts <- generateCuts net f cuts
         verbosePut 2 $ "Number of " ++ (if simp > 0 then "simplified " else "") ++
                        "disjuncts: " ++ show (length dnfCuts)
+        --
+        --z <- conciliate (transitions net)
+        --    (checkSimpleCuts dnfCuts) (transitionVectorConstraints net)
+        --verbosePut 0 $ "Conciliated set: " ++ show z
+        --
         rs <- mapM (checkSat . checkLivenessInvariantSat net) dnfCuts
         let added = map (Just . cutToLivenessInvariant) cuts
         return $ sequence (rs ++ added)
@@ -327,7 +333,7 @@ findLivenessRefinement net x = do
 
 findLivenessRefinementBySComponent :: PetriNet -> FiringVector ->
         OptIO (Maybe Cut)
-findLivenessRefinementBySComponent net x = do
+findLivenessRefinementBySComponent net x =
         checkSatMin $ checkSComponentWithCutSat net x
 
 findLivenessRefinementByEmptyTraps :: PetriNet -> Marking -> FiringVector ->
@@ -353,15 +359,7 @@ findLivenessRefinementByEmptyTraps net m x traps = do
                         return $ Just cut
                     (Just m', _) ->
                         findLivenessRefinementByEmptyTraps net m' x traps'
-{-
-generateLivenessRefinementFromSComponent :: PetriNet -> FiringVector -> [[Place]] ->
-        [Place] -> [Transition] -> OptIO Cut
-generateLivenessRefinementFromSComponent net components ps ts = do
-        r <- checkSatMin $ checkMultiWayCutSat net components ps ts
-        case r of
-            Nothing -> error "Could not find a cut, this should not happen"
-            Just ts -> (ts
--}
+
 generateLivenessRefinement :: PetriNet -> FiringVector -> [Trap] -> OptIO Cut
 generateLivenessRefinement net x traps = do
         -- TODO: also use better cuts for traps

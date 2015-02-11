@@ -2,6 +2,7 @@ module Solver.Simplifier (
      checkSubsumptionSat
     ,SimpleCut
     ,generateCuts
+    ,greedySimplify
 ) where
 
 import Data.SBV
@@ -12,10 +13,9 @@ import qualified Data.Set as S
 import Util
 import Options
 import Solver
+import Solver.TransitionInvariant
 import Property
 import PetriNet
-
-type SimpleCut = (S.Set Transition, [S.Set Transition])
 
 checkTransPositive :: SBMap Transition -> S.Set Transition -> SBool
 checkTransPositive m ts = bOr $ map (val m) $ S.elems ts
@@ -54,7 +54,9 @@ generateCuts net f cuts = do
             let cs = [formulaToCut f] : map cutToSimpleDNFCuts cuts
             let cs' = foldl1 (combine simp) cs
             let cs'' = if simp > 1 then filterInvariantTransitions net cs' else cs'
-            if simp > 1 then simplifyBySubsumption (simplifyCuts cs'') else return cs''
+            let cs''' = if simp > 1 then simplifyCuts cs'' else cs''
+            cs'''' <- if simp > 1 then mapM (greedySimplify net) cs''' else return cs'''
+            if simp > 1 then simplifyBySubsumption (simplifyCuts cs'''') else return cs''''
         where
             combine simp cs1 cs2 =
                 let cs  = [ (c1c0 `S.union` c2c0, c1cs ++ c2cs)
@@ -139,4 +141,29 @@ formulaToCut = transformF
             transformTerm (Var x) = S.singleton x
             transformTerm t =
                 error $ "term not supported for invariant: " ++ show t
+
+checkCut :: PetriNet -> SimpleCut -> OptIO Bool
+checkCut net cut = do
+        verbosePut 0 $ "checking cut " ++ show cut
+        r <- checkSat $ checkTransitionInvariantWithSimpleCutSat net cut
+        return $ isNothing r
+
+greedySimplifyCut :: PetriNet -> SimpleCut -> SimpleCut-> OptIO SimpleCut
+greedySimplifyCut net cutAcc@(c0Acc, csAcc) (c0, cs) =
+        case (S.null c0, cs) of
+            (True, []) -> return cutAcc
+            (False, _) -> do
+                let (c, c0') = S.deleteFindMin c0
+                let cut = (c0Acc `S.union` c0', csAcc ++ cs)
+                r <- checkCut net cut
+                greedySimplifyCut net (if r then cutAcc else (S.insert c c0Acc, csAcc)) (c0', cs)
+            (True, c:cs') -> do
+                let cut = (c0Acc `S.union` c0, csAcc ++ cs')
+                r <- checkCut net cut
+                greedySimplifyCut net (if r then cutAcc else (c0Acc, c:csAcc)) (c0, cs')
+
+greedySimplify :: PetriNet -> SimpleCut -> OptIO SimpleCut
+greedySimplify net cut = do
+        verbosePut 0 $ "simplifying cut " ++ show cut
+        greedySimplifyCut net (S.empty, []) cut
 

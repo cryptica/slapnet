@@ -9,7 +9,7 @@ module PetriNet
      pre,lpre,post,lpost,mpre,mpost,context,ghostTransitions,
      makePetriNet,makePetriNetWithTrans,
      makePetriNetFromStrings,makePetriNetWithTransFromStrings,Trap,Cut,
-     constructCut)
+     constructCut,SimpleCut)
 where
 
 import qualified Data.Map as M
@@ -26,6 +26,8 @@ instance Show Place where
         show (Place p) = p
 instance Show Transition where
         show (Transition t) = t
+
+type SimpleCut = (S.Set Transition, [S.Set Transition])
 
 type ContextMap a b = M.Map a ([(b, Integer)],[(b, Integer)])
 
