@@ -5,9 +5,9 @@ module Solver.Simplifier (
 ) where
 
 import Data.SBV
+import Data.Maybe
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Control.Monad
 
 import Util
 import Options
@@ -48,29 +48,44 @@ checkSubsumptionSat c0 cs =
 cutTransitions :: SimpleCut -> S.Set Transition
 cutTransitions (c0, cs) = S.unions (c0:cs)
 
-generateCuts :: Formula Transition -> [Cut] -> OptIO [SimpleCut]
-generateCuts f cuts =
-            foldM combine [formulaToCut f] (map cutToSimpleDNFCuts cuts)
+generateCuts :: PetriNet -> Formula Transition -> [Cut] -> OptIO [SimpleCut]
+generateCuts net f cuts = do
+            simp <- opt optSimpFormula
+            let cs = [formulaToCut f] : map cutToSimpleDNFCuts cuts
+            let cs' = foldl1 (combine simp) cs
+            let cs'' = if simp > 1 then filterInvariantTransitions net cs' else cs'
+            if simp > 1 then simplifyBySubsumption (simplifyCuts cs'') else return cs''
         where
-            combine cs1 cs2 = do
-                simp <- opt optSimpFormula
+            combine simp cs1 cs2 =
                 let cs  = [ (c1c0 `S.union` c2c0, c1cs ++ c2cs)
                          | (c1c0, c1cs) <- cs1, (c2c0, c2cs) <- cs2 ]
-                let cs'  = if simp > 0 then simplifyCuts cs else cs
-                let cs'' = if simp > 1 then simplifyBySubsumption cs' else return cs'
-                cs''
+                in  if simp > 0 then simplifyCuts cs else cs
+
+filterInvariantTransitions :: PetriNet -> [SimpleCut] -> [SimpleCut]
+filterInvariantTransitions net cuts =
+        let ts = S.fromList $ invariantTransitions net
+        in  map (filterTransitions ts) cuts
+
+filterTransitions :: S.Set Transition -> SimpleCut -> SimpleCut
+filterTransitions ts (c0, cs) =
+        let c0' = c0 `S.difference` ts
+            cs' = filter (S.null . S.intersection ts) cs
+        in  (c0', cs')
+
+invariantTransitions :: PetriNet -> [Transition]
+invariantTransitions net = filter (\t -> lpre net t == lpost net t) $ transitions net
 
 simplifyCuts :: [SimpleCut] -> [SimpleCut]
-simplifyCuts = removeWith isMoreGeneralCut . concatMap simplifyCut
+simplifyCuts = removeWith isMoreGeneralCut . mapMaybe simplifyCut
 
-simplifyCut :: SimpleCut -> [SimpleCut]
+simplifyCut :: SimpleCut -> Maybe SimpleCut
 simplifyCut (c0, cs) =
         let remove b a = a `S.difference` b
             cs' = removeWith S.isSubsetOf $ map (remove c0) cs
         in  if any S.null cs' then
-                []
+                Nothing
             else
-                [(c0, cs')]
+                Just (c0, cs')
 
 simplifyBySubsumption :: [SimpleCut] -> OptIO [SimpleCut]
 simplifyBySubsumption = simplifyBySubsumption' []
@@ -78,6 +93,7 @@ simplifyBySubsumption = simplifyBySubsumption' []
 simplifyBySubsumption' :: [SimpleCut] -> [SimpleCut] -> OptIO [SimpleCut]
 simplifyBySubsumption' acc [] = return $ reverse acc
 simplifyBySubsumption' acc (c0:cs) = do
+        -- TODO: check with prime implicants
         r <- checkSat $ checkSubsumptionSat c0 (acc ++ cs)
         let acc' = case r of
                     Nothing -> acc
@@ -88,8 +104,8 @@ removeWith :: (a -> a -> Bool) -> [a] -> [a]
 removeWith f = removeCuts' []
         where
             removeCuts' acc [] = reverse acc
-            removeCuts' acc (x:xs) = removeCuts' (x : cutFilter x acc) (cutFilter x xs)
-            cutFilter cut = filter (not . f cut)
+            removeCuts' acc (x:xs) = removeCuts' (x : notFilter x acc) (notFilter x xs)
+            notFilter x = filter (not . f x)
 
 isMoreGeneralCut :: SimpleCut -> SimpleCut -> Bool
 isMoreGeneralCut (c1c0, c1cs) (c2c0, c2cs) =
@@ -98,6 +114,7 @@ isMoreGeneralCut (c1c0, c1cs) (c2c0, c2cs) =
 cutToSimpleDNFCuts :: Cut -> [SimpleCut]
 cutToSimpleDNFCuts (ts, u) = (S.empty, [S.fromList u]) : map (\(_, t) -> (S.fromList t, [])) ts
 
+-- TODO: allow formulas with or
 formulaToCut :: Formula Transition -> SimpleCut
 formulaToCut = transformF
         where

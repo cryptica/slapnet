@@ -47,8 +47,8 @@ checkSat (problemName, resultName, vars, constraint, interpretation) = do
                 verbosePut 4 $ "- raw model: " ++ show rawModel
                 return $ Just model
 
-checkSatMin :: (SatModel a, SymWord a, Show a, Show b) =>
-        (Maybe Integer -> ConstraintProblem a (b, Integer)) -> OptIO (Maybe b)
+checkSatMin :: (SatModel a, SymWord a, Show a, Show b, Show c) =>
+        (Maybe c -> ConstraintProblem a (b, c)) -> OptIO (Maybe b)
 checkSatMin minProblem = do
         optMin <- opt optMinimizeRefinement
         r0 <- checkSat $ minProblem Nothing

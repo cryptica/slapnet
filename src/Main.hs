@@ -30,10 +30,9 @@ import Solver.TransitionInvariant
 import Solver.SubnetEmptyTrap
 import Solver.LivenessInvariant
 import Solver.SafetyInvariant
-import Solver.SComponent
+import Solver.SComponentWithCut
 import Solver.Simplifier
 --import Solver.CommFreeReachability
-
 
 writeFiles :: String -> PetriNet -> [Property] -> OptIO ()
 writeFiles basename net props = do
@@ -287,7 +286,7 @@ checkLivenessProperty net f = do
 getLivenessInvariant :: PetriNet -> Formula Transition -> [Cut] -> OptIO (Maybe [LivenessInvariant])
 getLivenessInvariant net f cuts = do
         simp <- opt optSimpFormula
-        dnfCuts <- generateCuts f cuts
+        dnfCuts <- generateCuts net f cuts
         verbosePut 2 $ "Number of " ++ (if simp > 0 then "simplified " else "") ++
                        "disjuncts: " ++ show (length dnfCuts)
         rs <- mapM (checkSat . checkLivenessInvariantSat net) dnfCuts
@@ -328,8 +327,8 @@ findLivenessRefinement net x = do
 
 findLivenessRefinementBySComponent :: PetriNet -> FiringVector ->
         OptIO (Maybe Cut)
-findLivenessRefinementBySComponent net x =
-        checkSatMin $ checkSComponentSat net x
+findLivenessRefinementBySComponent net x = do
+        checkSatMin $ checkSComponentWithCutSat net x
 
 findLivenessRefinementByEmptyTraps :: PetriNet -> Marking -> FiringVector ->
         [Trap] -> OptIO (Maybe Cut)
@@ -354,9 +353,18 @@ findLivenessRefinementByEmptyTraps net m x traps = do
                         return $ Just cut
                     (Just m', _) ->
                         findLivenessRefinementByEmptyTraps net m' x traps'
-
+{-
+generateLivenessRefinementFromSComponent :: PetriNet -> FiringVector -> [[Place]] ->
+        [Place] -> [Transition] -> OptIO Cut
+generateLivenessRefinementFromSComponent net components ps ts = do
+        r <- checkSatMin $ checkMultiWayCutSat net components ps ts
+        case r of
+            Nothing -> error "Could not find a cut, this should not happen"
+            Just ts -> (ts
+-}
 generateLivenessRefinement :: PetriNet -> FiringVector -> [Trap] -> OptIO Cut
 generateLivenessRefinement net x traps = do
+        -- TODO: also use better cuts for traps
         let cut = constructCut net x traps
         verbosePut 3 $ "- cut: " ++ show cut
         return cut

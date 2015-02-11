@@ -15,7 +15,7 @@ where
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Control.Arrow (first,(***))
-import Data.List ((\\))
+import Data.List (sort,(\\))
 
 import Util
 
@@ -99,18 +99,19 @@ instance Show PetriNet where
                           show l ++ " -> " ++ show s ++ " -> " ++ show r
 
 -- TODO: better cuts, scc, min cut?
-{-
+
 constructCut:: PetriNet -> FiringVector -> [Trap] -> Cut
 constructCut net _ traps = (trapComponents, trapOutputs)
         where trapComponent trap = (sort trap, sort (mpre net trap) \\ trapOutputs)
               trapComponents = listSet $ map trapComponent traps
               trapOutput trap = mpost net trap \\ mpre net trap
               trapOutputs = listSet $ concatMap trapOutput traps
--}
+{-
 constructCut:: PetriNet -> FiringVector -> [Trap] -> Cut
 constructCut net x _ = (map (\t -> ([],[t])) tPositive, tNegative)
         where tPositive = elems x
               tNegative = transitions net \\ tPositive
+-}
 
 renamePlace :: (String -> String) -> Place -> Place
 renamePlace f (Place p) = Place (f p)
