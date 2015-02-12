@@ -20,22 +20,22 @@ subnetTrapConstraints net m x b =
 properTrap :: SIMap Place -> SBool
 properTrap b = sum (vals b) .> 0
 
-checkSizeLimit :: SIMap Place -> Maybe Integer -> SBool
+checkSizeLimit :: SIMap Place -> Maybe (Int, Integer) -> SBool
 checkSizeLimit _ Nothing = true
-checkSizeLimit b (Just size) = (.< literal size) $ sumVal b
+checkSizeLimit b (Just (_, size)) = (.< literal size) $ sumVal b
 
 checkBinary :: SIMap Place -> SBool
 checkBinary = bAnd . map (\x -> x .== 0 ||| x .== 1) . vals
 
 checkSubnetEmptyTrap :: PetriNet -> Marking -> FiringVector ->
-        SIMap Place -> Maybe Integer -> SBool
+        SIMap Place -> Maybe (Int, Integer) -> SBool
 checkSubnetEmptyTrap net m x b sizeLimit =
         subnetTrapConstraints net m x b &&&
         checkSizeLimit b sizeLimit &&&
         checkBinary b &&&
         properTrap b
 
-checkSubnetEmptyTrapSat :: PetriNet -> Marking -> FiringVector -> Maybe Integer ->
+checkSubnetEmptyTrapSat :: PetriNet -> Marking -> FiringVector -> Maybe (Int, Integer) ->
         ConstraintProblem Integer (Trap, Integer)
 checkSubnetEmptyTrapSat net m x sizeLimit =
         let b = makeVarMap $ filter (\p -> val m p == 0) $ mpost net $ elems x

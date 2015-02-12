@@ -65,11 +65,11 @@ checkBinary p' t' y =
             checkBins y
         where checkBins xs = bAnd $ map (\x -> x .== 0 ||| x .== 1) $ vals xs
 
-checkSizeLimit :: SIMap Place -> SIMap Transition -> Maybe Integer -> SBool
+checkSizeLimit :: SIMap Place -> SIMap Transition -> Maybe (Int, Integer) -> SBool
 checkSizeLimit _ _ Nothing = true
-checkSizeLimit p' _ (Just size) = (.< literal size) $ sumVal p'
+checkSizeLimit p' _ (Just (_, size)) = (.< literal size) $ sumVal p'
 
-checkSComponent :: PetriNet -> FiringVector -> Maybe Integer -> SIMap Place ->
+checkSComponent :: PetriNet -> FiringVector -> Maybe (Int, Integer) -> SIMap Place ->
         SIMap Transition -> SIMap Transition -> SBool
 checkSComponent net x sizeLimit p' t' y =
         checkPrePostPlaces net p' t' &&&
@@ -81,7 +81,7 @@ checkSComponent net x sizeLimit p' t' y =
         checkTokens net p' &&&
         checkBinary p' t' y
 
-checkSComponentSat :: PetriNet -> FiringVector -> Maybe Integer ->
+checkSComponentSat :: PetriNet -> FiringVector -> Maybe (Int, Integer) ->
         ConstraintProblem Integer (Cut, Integer)
 checkSComponentSat net x sizeLimit =
         let fired = elems x

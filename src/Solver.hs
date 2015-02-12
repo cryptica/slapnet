@@ -48,21 +48,21 @@ checkSat (problemName, resultName, vars, constraint, interpretation) = do
                 return $ Just model
 
 checkSatMin :: (SatModel a, SymWord a, Show a, Show b, Show c) =>
-        (Maybe c -> ConstraintProblem a (b, c)) -> OptIO (Maybe b)
+        (Maybe (Int, c) -> ConstraintProblem a (b, c)) -> OptIO (Maybe b)
 checkSatMin minProblem = do
         optMin <- opt optMinimizeRefinement
         r0 <- checkSat $ minProblem Nothing
         case r0 of
             Nothing -> return Nothing
             Just (result, size) ->
-                if optMin then
-                    Just <$> findSmaller result size
+                if optMin > 0 then
+                    Just <$> findSmaller optMin result size
                 else
                     return $ Just result
-    where findSmaller result size = do
+    where findSmaller optMin result size = do
             verbosePut 2 $ "Checking for size smaller than " ++ show size
-            r1 <- checkSat $ minProblem (Just size)
+            r1 <- checkSat $ minProblem (Just (optMin, size))
             case r1 of
                 Nothing -> return result
-                Just (result', size') -> findSmaller result' size'
+                Just (result', size') -> findSmaller optMin result' size'
 

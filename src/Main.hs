@@ -31,8 +31,9 @@ import Solver.SubnetEmptyTrap
 import Solver.LivenessInvariant
 import Solver.SafetyInvariant
 import Solver.SComponentWithCut
+import Solver.SComponent
 import Solver.Simplifier
-import Solver.Interpolant
+--import Solver.Interpolant
 --import Solver.CommFreeReachability
 
 writeFiles :: String -> PetriNet -> [Property] -> OptIO ()

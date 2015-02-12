@@ -45,7 +45,7 @@ data Options = Options { inputFormat :: InputFormat
                        , optRefine :: Bool
                        , optSimpFormula :: Int
                        , optRefinementType :: RefinementType
-                       , optMinimizeRefinement :: Bool
+                       , optMinimizeRefinement :: Int
                        , optInvariant :: Bool
                        , optOutput :: Maybe String
                        , outputFormat :: OutputFormat
@@ -63,7 +63,7 @@ startOptions = Options { inputFormat = PNET
                        , optRefine = True
                        , optSimpFormula = 2
                        , optRefinementType = SComponentRefinement
-                       , optMinimizeRefinement = False
+                       , optMinimizeRefinement = 0
                        , optInvariant = False
                        , optOutput = Nothing
                        , outputFormat = OutLOLA
@@ -238,11 +238,15 @@ options =
                }))
         "Use simplification level 2 for invariant generation"
 
-        , Option "" ["minimize-refinement"]
-        (NoArg (\opt -> Right opt {
-                   optMinimizeRefinement = True
-               }))
-        "Minimize size of refinement structure (trap/s-component)"
+        , Option "m" ["minimize"]
+        (OptArg (\arg opt -> case arg of
+                    Nothing -> Right opt { optMinimizeRefinement = 1 }
+                    Just is -> case reads is of
+                            [(i, "")] | i >= 1 -> Right opt { optMinimizeRefinement = i }
+                            _ -> Left ("invalid argument for minimization method: " ++ is)
+                )
+                "METHOD")
+        "Minimize size of refinement structure by method METHOD"
 
         , Option "v" ["verbose"]
         (NoArg (\opt -> Right opt { optVerbosity = optVerbosity opt + 1 }))

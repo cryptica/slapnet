@@ -68,9 +68,9 @@ checkBinary p1 p2 t0 t1 t2 =
 
 checkSizeLimit ::
         SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> SIMap Transition ->
-        Maybe SizeIndicator -> SBool
+        Maybe (Int, SizeIndicator) -> SBool
 checkSizeLimit _ _ _ _ _ Nothing = true
-checkSizeLimit p1 p2 t0 t1 t2 (Just (p1Size, p2Size, t0Size, t1Size, t2Size)) =
+checkSizeLimit p1 p2 t0 t1 t2 (Just (minMethod, (p1Size, p2Size, t0Size, t1Size, t2Size))) =
         let p1SizeNext = sumVal p1
             p2SizeNext = sumVal p2
             t0SizeNext = sumVal t0
@@ -81,16 +81,33 @@ checkSizeLimit p1 p2 t0 t1 t2 (Just (p1Size, p2Size, t0Size, t1Size, t2Size)) =
             t0SizeNow = literal t0Size
             t1SizeNow = literal t1Size
             t2SizeNow = literal t2Size
-        in  (p1SizeNext + p2SizeNext .< p1SizeNow + p2SizeNow) |||
-            (p1SizeNext + p2SizeNext .== p1SizeNow + p2SizeNow &&& t0SizeNext .< t0SizeNow) |||
-            (p1SizeNext + p2SizeNext .== p1SizeNow + p2SizeNow &&& t0SizeNext .== t0SizeNow &&&
-            ((t1SizeNext .> t1SizeNow &&& t2SizeNext .>= t2SizeNow) |||
-            (t1SizeNext .>= t1SizeNow &&& t2SizeNext .> t2SizeNow)))
---        in  (t0SizeNext .< t0SizeNow) |||
---            (t0SizeNext .== t0SizeNow &&& t1SizeNext .> t1SizeNow &&& t2SizeNext .>= t2SizeNow) |||
---            (t0SizeNext .== t0SizeNow &&& t1SizeNext .>= t1SizeNow &&& t2SizeNext .> t2SizeNow)
+        in  case minMethod of
+                1 -> (p1SizeNext + p2SizeNext .< p1SizeNow + p2SizeNow) |||
+                    (p1SizeNext + p2SizeNext .== p1SizeNow + p2SizeNow &&&
+                        t0SizeNext .< t0SizeNow) |||
+                    (p1SizeNext + p2SizeNext .== p1SizeNow + p2SizeNow &&&
+                        t0SizeNext .== t0SizeNow &&&
+                        t1SizeNext .> t1SizeNow &&& t2SizeNext .>= t2SizeNow) |||
+                    (p1SizeNext + p2SizeNext .== p1SizeNow + p2SizeNow &&&
+                        t0SizeNext .== t0SizeNow &&&
+                        t1SizeNext .>= t1SizeNow &&& t2SizeNext .> t2SizeNow)
+                2 -> (t0SizeNext .< t0SizeNow) |||
+                    (t0SizeNext .== t0SizeNow &&&
+                        t1SizeNext .> t1SizeNow &&& t2SizeNext .>= t2SizeNow) |||
+                    (t0SizeNext .== t0SizeNow &&&
+                        t1SizeNext .>= t1SizeNow &&& t2SizeNext .> t2SizeNow)
+                3 -> (t1SizeNext .> t1SizeNow &&& t2SizeNext .>= t2SizeNow) |||
+                    (t1SizeNext .>= t1SizeNow &&& t2SizeNext .> t2SizeNow) |||
+                    (t1SizeNext .== t1SizeNow &&& t2SizeNext .== t2SizeNow &&&
+                        t0SizeNext .< t0SizeNow)
+                4 -> (t0SizeNext .< t0SizeNow) |||
+                    (t0SizeNext .== t0SizeNow &&&
+                        t1SizeNext .> t1SizeNow &&& t2SizeNext .>= t2SizeNow) |||
+                    (t0SizeNext .== t0SizeNow &&&
+                        t1SizeNext .>= t1SizeNow &&& t2SizeNext .> t2SizeNow)
+                _ -> error $ "minimization method " ++ show minMethod ++ " not supported"
 
-checkSComponent :: PetriNet -> FiringVector -> Maybe SizeIndicator ->
+checkSComponent :: PetriNet -> FiringVector -> Maybe (Int, SizeIndicator) ->
         SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> SIMap Transition ->
         SBool
 checkSComponent net x sizeLimit p1 p2 t0 t1 t2 =
@@ -103,7 +120,7 @@ checkSComponent net x sizeLimit p1 p2 t0 t1 t2 =
         checkBinary p1 p2 t0 t1 t2 &&&
         checkDisjunct net p1 p2 t0 t1 t2
 
-checkSComponentWithCutSat :: PetriNet -> FiringVector -> Maybe SizeIndicator ->
+checkSComponentWithCutSat :: PetriNet -> FiringVector -> Maybe (Int, SizeIndicator) ->
         ConstraintProblem Integer (Cut, SizeIndicator)
 checkSComponentWithCutSat net x sizeLimit =
         let p1 = makeVarMapWith ("P1@"++) $ places net
