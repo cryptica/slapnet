@@ -7,6 +7,8 @@ module Solver.Simplifier (
 
 import Data.SBV
 import Data.Maybe
+import Control.Monad
+import Control.Monad.Identity
 import qualified Data.Map as M
 import qualified Data.Set as S
 
@@ -51,34 +53,45 @@ cutTransitions (c0, cs) = S.unions (c0:cs)
 generateCuts :: PetriNet -> Formula Transition -> [Cut] -> OptIO [SimpleCut]
 generateCuts net f cuts = do
             simp <- opt optSimpFormula
-            let cs = [formulaToCut f] : map cutToSimpleDNFCuts cuts
-            let cs' = foldl1 (combine simp) cs
-            let cs'' = if simp > 1 then filterInvariantTransitions net cs' else cs'
-            let cs''' = if simp > 1 then simplifyCuts cs'' else cs''
-            cs'''' <- if simp > 1 then mapM (greedySimplify net) cs''' else return cs'''
-            if simp > 1 then simplifyBySubsumption (simplifyCuts cs'''') else return cs''''
+            let simpFunctions =
+                    [ return . simplifyCuts
+                    , return . removeImplicants
+                    , return . filterInvariantTransitions net
+                    , simplifyBySubsumption
+                    , greedySimplify net
+                    , simplifyBySubsumption
+                    ]
+            let (otfSimps, afterSimps) = splitAt 2 $ take simp simpFunctions
+            let simpFunction = foldl (>=>) return $ reverse afterSimps
+            let otfFunction = foldl (>=>) return $ reverse otfSimps
+            let cnfCuts = [formulaToCut f] : map cutToSimpleDNFCuts cuts
+            dnfCuts <- foldM (combine otfFunction) [(S.empty, [])] cnfCuts
+            simpFunction dnfCuts
         where
-            combine simp cs1 cs2 =
-                let cs  = [ (c1c0 `S.union` c2c0, c1cs ++ c2cs)
-                         | (c1c0, c1cs) <- cs1, (c2c0, c2cs) <- cs2 ]
-                in  if simp > 0 then simplifyCuts cs else cs
+            combine simpFunction cs1 cs2 =
+                simpFunction [ (c1c0 `S.union` c2c0, c1cs ++ c2cs)
+                             | (c1c0, c1cs) <- cs1, (c2c0, c2cs) <- cs2 ]
 
 filterInvariantTransitions :: PetriNet -> [SimpleCut] -> [SimpleCut]
-filterInvariantTransitions net cuts =
+filterInvariantTransitions net =
         let ts = S.fromList $ invariantTransitions net
-        in  map (filterTransitions ts) cuts
+        in  runIdentity . simplifyWithFilter (return . filterTransitions ts) isMoreGeneralCut
 
-filterTransitions :: S.Set Transition -> SimpleCut -> SimpleCut
+filterTransitions :: S.Set Transition -> SimpleCut -> (Bool, SimpleCut)
 filterTransitions ts (c0, cs) =
         let c0' = c0 `S.difference` ts
             cs' = filter (S.null . S.intersection ts) cs
-        in  (c0', cs')
+            changed = not $ all (S.null . S.intersection ts) cs
+        in  (changed, (c0', cs'))
 
 invariantTransitions :: PetriNet -> [Transition]
 invariantTransitions net = filter (\t -> lpre net t == lpost net t) $ transitions net
 
+removeImplicants :: [SimpleCut] -> [SimpleCut]
+removeImplicants = removeWith isMoreGeneralCut
+
 simplifyCuts :: [SimpleCut] -> [SimpleCut]
-simplifyCuts = removeWith isMoreGeneralCut . mapMaybe simplifyCut
+simplifyCuts = mapMaybe simplifyCut
 
 simplifyCut :: SimpleCut -> Maybe SimpleCut
 simplifyCut (c0, cs) =
@@ -102,6 +115,18 @@ simplifyBySubsumption' acc (c0:cs) = do
                     Just _ -> c0:acc
         simplifyBySubsumption' acc' cs
 
+simplifyWithFilter :: (Monad m) => (a -> m (Bool, a)) -> (a -> a -> Bool) -> [a] -> m [a]
+simplifyWithFilter simp f = simpFilter []
+        where
+            simpFilter acc [] = return $ reverse acc
+            simpFilter acc (x:xs) = do
+                (changed, x') <- simp x
+                if changed then
+                    simpFilter (x' : notFilter x' acc) (notFilter x' xs)
+                else
+                    simpFilter (x' : acc) xs
+            notFilter x = filter (not . f x)
+
 removeWith :: (a -> a -> Bool) -> [a] -> [a]
 removeWith f = removeCuts' []
         where
@@ -109,6 +134,7 @@ removeWith f = removeCuts' []
             removeCuts' acc (x:xs) = removeCuts' (x : notFilter x acc) (notFilter x xs)
             notFilter x = filter (not . f x)
 
+-- c1 `isMoreGeneralCut` c2 <=> (c2 => c1)
 isMoreGeneralCut :: SimpleCut -> SimpleCut -> Bool
 isMoreGeneralCut (c1c0, c1cs) (c2c0, c2cs) =
         c1c0 `S.isSubsetOf` c2c0 && all (\c1 -> any (`S.isSubsetOf` c1) c2cs) c1cs
@@ -144,26 +170,26 @@ formulaToCut = transformF
 
 checkCut :: PetriNet -> SimpleCut -> OptIO Bool
 checkCut net cut = do
-        verbosePut 0 $ "checking cut " ++ show cut
         r <- checkSat $ checkTransitionInvariantWithSimpleCutSat net cut
         return $ isNothing r
 
-greedySimplifyCut :: PetriNet -> SimpleCut -> SimpleCut-> OptIO SimpleCut
-greedySimplifyCut net cutAcc@(c0Acc, csAcc) (c0, cs) =
+greedySimplifyCut :: PetriNet -> Bool -> SimpleCut -> SimpleCut-> OptIO (Bool, SimpleCut)
+greedySimplifyCut net changed cutAcc@(c0Acc, csAcc) (c0, cs) =
         case (S.null c0, cs) of
-            (True, []) -> return cutAcc
+            (True, []) -> return (changed, cutAcc)
             (False, _) -> do
                 let (c, c0') = S.deleteFindMin c0
                 let cut = (c0Acc `S.union` c0', csAcc ++ cs)
                 r <- checkCut net cut
-                greedySimplifyCut net (if r then cutAcc else (S.insert c c0Acc, csAcc)) (c0', cs)
+                greedySimplifyCut net (r || changed)
+                    (if r then cutAcc else (S.insert c c0Acc, csAcc)) (c0', cs)
             (True, c:cs') -> do
                 let cut = (c0Acc `S.union` c0, csAcc ++ cs')
                 r <- checkCut net cut
-                greedySimplifyCut net (if r then cutAcc else (c0Acc, c:csAcc)) (c0, cs')
+                greedySimplifyCut net (r || changed)
+                    (if r then cutAcc else (c0Acc, c:csAcc)) (c0, cs')
 
-greedySimplify :: PetriNet -> SimpleCut -> OptIO SimpleCut
-greedySimplify net cut = do
-        verbosePut 0 $ "simplifying cut " ++ show cut
-        greedySimplifyCut net (S.empty, []) cut
+greedySimplify :: PetriNet -> [SimpleCut] -> OptIO [SimpleCut]
+greedySimplify net =
+        simplifyWithFilter (greedySimplifyCut net False (S.empty, [])) isMoreGeneralCut
 

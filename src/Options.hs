@@ -59,7 +59,7 @@ startOptions = Options { inputFormat = PNET
                        , optShowVersion = False
                        , optProperties = []
                        , optTransformations = []
-                       , optSimpFormula = 2
+                       , optSimpFormula = 6
                        , optRefinementType = Just SComponentWithCutRefinement
                        , optMinimizeRefinement = 0
                        , optInvariant = False
@@ -87,7 +87,7 @@ options =
         (NoArg (\opt -> Right opt { inputFormat = MIST }))
         "Use the mist input format"
 
-        , Option "s" ["structure"]
+        , Option "" ["structure"]
         (NoArg (\opt -> Right opt { optPrintStructure = True }))
         "Print structural information"
 
@@ -218,11 +218,13 @@ options =
                }))
         "Do not use the properties given in the input file"
 
-        , Option "" ["simp-0"]
-        (NoArg (\opt -> Right opt {
-                   optSimpFormula = 0
-               }))
-        "Do not simplify formula for invariant generation"
+        , Option "s" ["simp"]
+        (ReqArg (\arg opt -> case reads arg of
+                    [(i, "")] -> Right opt { optSimpFormula = i }
+                    _ -> Left ("invalid argument for simplification level: " ++ arg)
+                )
+                "LEVEL")
+        "Simply formula with level LEVEL"
 
         , Option "" ["simp-1"]
         (NoArg (\opt -> Right opt {

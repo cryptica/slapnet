@@ -288,15 +288,8 @@ checkLivenessProperty net f = do
 
 getLivenessInvariant :: PetriNet -> Formula Transition -> [Cut] -> OptIO (Maybe [LivenessInvariant])
 getLivenessInvariant net f cuts = do
-        simp <- opt optSimpFormula
         dnfCuts <- generateCuts net f cuts
-        verbosePut 2 $ "Number of " ++ (if simp > 0 then "simplified " else "") ++
-                       "disjuncts: " ++ show (length dnfCuts)
-        --
-        --z <- conciliate (transitions net)
-        --    (checkSimpleCuts dnfCuts) (transitionVectorConstraints net)
-        --verbosePut 0 $ "Conciliated set: " ++ show z
-        --
+        verbosePut 2 $ "Number of disjuncts: " ++ show (length dnfCuts)
         rs <- mapM (checkSat . checkLivenessInvariantSat net) dnfCuts
         let added = map (Just . cutToLivenessInvariant) cuts
         return $ sequence (rs ++ added)
