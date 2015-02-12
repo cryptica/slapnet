@@ -33,7 +33,7 @@ data ImplicitProperty = Termination
                       | StructCommunicationFree
                       deriving (Show,Read)
 
-data RefinementType = TrapRefinement | SComponentRefinement
+data RefinementType = TrapRefinement | SComponentRefinement | SComponentWithCutRefinement
                     deriving (Show,Read)
 
 data Options = Options { inputFormat :: InputFormat
@@ -42,9 +42,8 @@ data Options = Options { inputFormat :: InputFormat
                        , optShowVersion :: Bool
                        , optProperties :: [ImplicitProperty]
                        , optTransformations :: [NetTransformation]
-                       , optRefine :: Bool
                        , optSimpFormula :: Int
-                       , optRefinementType :: RefinementType
+                       , optRefinementType :: Maybe RefinementType
                        , optMinimizeRefinement :: Int
                        , optInvariant :: Bool
                        , optOutput :: Maybe String
@@ -60,9 +59,8 @@ startOptions = Options { inputFormat = PNET
                        , optShowVersion = False
                        , optProperties = []
                        , optTransformations = []
-                       , optRefine = True
                        , optSimpFormula = 2
-                       , optRefinementType = SComponentRefinement
+                       , optRefinementType = Just SComponentWithCutRefinement
                        , optMinimizeRefinement = 0
                        , optInvariant = False
                        , optOutput = Nothing
@@ -128,7 +126,7 @@ options =
                    optProperties = DeadlockFreeUnlessFinal : optProperties opt
                }))
         ("Prove that the net is deadlock-free\n" ++
-         "unless it is in the final marking")
+         "  unless it is in the final marking")
 
         , Option "" ["final-state-unreachable"]
         (NoArg (\opt -> Right opt {
@@ -179,17 +177,17 @@ options =
         (NoArg (\opt -> Right opt { optInvariant = True }))
         "Generate an invariant"
 
-        , Option "n" ["no-refinement"]
-        (NoArg (\opt -> Right opt { optRefine = False }))
-        "Don't use refinement"
-
-        , Option "" ["trap-refinement"]
-        (NoArg (\opt -> Right opt { optRefinementType = TrapRefinement }))
-        "Only use empty trap refinement for liveness properties"
-
-        , Option "" ["scomponent-refinement"]
-        (NoArg (\opt -> Right opt { optRefinementType = SComponentRefinement }))
-        "Use S-component refinement before trap refinement"
+        , Option "r" ["refinement"]
+        (ReqArg (\arg opt -> case reads arg :: [(Int, String)] of
+                    [(0, "")] -> Right opt { optRefinementType = Nothing }
+                    [(1, "")] -> Right opt { optRefinementType = Just SComponentWithCutRefinement }
+                    [(2, "")] -> Right opt { optRefinementType = Just SComponentRefinement }
+                    [(3, "")] -> Right opt { optRefinementType = Just TrapRefinement }
+                    _ -> Left ("invalid argument for refinement method: " ++ arg)
+                )
+                "METHOD")
+        ("Refine with METHOD (0=none, 1=SCompCut+Traps,\n" ++
+         "  2=SComp+Traps, 3=Traps)")
 
         , Option "o" ["output"]
         (ReqArg (\arg opt -> Right opt {

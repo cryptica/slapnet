@@ -5,6 +5,7 @@ import System.IO
 import Control.Monad
 import Control.Arrow (first)
 import Data.List (partition)
+import Data.Maybe
 import qualified Data.ByteString.Lazy as L
 import Control.Monad.Reader
 
@@ -254,8 +255,8 @@ checkSafetyProperty' net f traps = do
         case r of
             Nothing -> return (Nothing, traps)
             Just m -> do
-                refine <- opt optRefine
-                if refine then
+                refine <- opt optRefinementType
+                if isJust refine then
                     refineSafetyProperty net f traps m
                 else
                     return (Just m, traps)
@@ -307,34 +308,42 @@ checkLivenessProperty' net f cuts = do
         case r of
             Nothing -> return (Nothing, cuts)
             Just x -> do
-                refine <- opt optRefine
-                if refine then do
-                    rt <- findLivenessRefinement net x
-                    case rt of
-                        Nothing ->
-                            return (Just x, cuts)
-                        Just cut ->
-                            checkLivenessProperty' net f (cut:cuts)
-                else
-                    return (Just x, cuts)
+                rt <- findLivenessRefinement net x
+                case rt of
+                    Nothing ->
+                        return (Just x, cuts)
+                    Just cut ->
+                        checkLivenessProperty' net f (cut:cuts)
 
 findLivenessRefinement :: PetriNet -> FiringVector ->
         OptIO (Maybe Cut)
 findLivenessRefinement net x = do
         refinementType <- opt optRefinementType
         case refinementType of
-            TrapRefinement ->
+            Just TrapRefinement ->
                 findLivenessRefinementByEmptyTraps net (initialMarking net) x []
-            SComponentRefinement -> do
+            Just SComponentRefinement -> do
                 r1 <- findLivenessRefinementBySComponent net x
                 case r1 of
                     Nothing -> findLivenessRefinementByEmptyTraps net
                                                       (initialMarking net) x []
                     Just _ -> return r1
+            Just SComponentWithCutRefinement -> do
+                r1 <- findLivenessRefinementBySComponentWithCut net x
+                case r1 of
+                    Nothing -> findLivenessRefinementByEmptyTraps net
+                                                      (initialMarking net) x []
+                    Just _ -> return r1
+            Nothing -> return Nothing
 
 findLivenessRefinementBySComponent :: PetriNet -> FiringVector ->
         OptIO (Maybe Cut)
 findLivenessRefinementBySComponent net x =
+        checkSatMin $ checkSComponentSat net x
+
+findLivenessRefinementBySComponentWithCut :: PetriNet -> FiringVector ->
+        OptIO (Maybe Cut)
+findLivenessRefinementBySComponentWithCut net x =
         checkSatMin $ checkSComponentWithCutSat net x
 
 findLivenessRefinementByEmptyTraps :: PetriNet -> Marking -> FiringVector ->
@@ -352,7 +361,7 @@ findLivenessRefinementByEmptyTraps net m x traps = do
                         return Nothing
             Just trap -> do
                 let traps' = trap:traps
-                rm <- local (\opts -> opts { optRefine = False }) $
+                rm <- local (\opts -> opts { optRefinementType = Nothing }) $
                             checkSafetyProperty' net FTrue traps'
                 case rm of
                     (Nothing, _) -> do
