@@ -53,20 +53,39 @@ cutTransitions (c0, cs) = S.unions (c0:cs)
 generateCuts :: PetriNet -> Formula Transition -> [Cut] -> OptIO [SimpleCut]
 generateCuts net f cuts = do
             simp <- opt optSimpFormula
+
             let simpFunctions =
+                    [ return . simplifyCuts
+                    , return . removeImplicants
+                    , simplifyBySubsumption
+                    , greedySimplify net f
+                    , simplifyBySubsumption
+                    ]
+            let (otfSimps, afterSimps) = splitAt 2 $ take simp simpFunctions
+            let simpFunction = foldl (>=>) return afterSimps
+            let otfFunction = foldl (>=>) return otfSimps
+            let cnfCuts = map cutToSimpleDNFCuts cuts
+            dnfCuts <- foldM (combine otfFunction) [(S.empty, [])] cnfCuts
+            simpCuts <- simpFunction dnfCuts
+
+            let simpFunctions' =
                     [ return . simplifyCuts
                     , return . removeImplicants
                     , return . filterInvariantTransitions net
                     , simplifyBySubsumption
-                    , greedySimplify net
+                    , greedySimplify net FTrue
                     , simplifyBySubsumption
                     ]
-            let (otfSimps, afterSimps) = splitAt 2 $ take simp simpFunctions
-            let simpFunction = foldl (>=>) return $ reverse afterSimps
-            let otfFunction = foldl (>=>) return $ reverse otfSimps
-            let cnfCuts = [formulaToCut f] : map cutToSimpleDNFCuts cuts
-            dnfCuts <- foldM (combine otfFunction) [(S.empty, [])] cnfCuts
-            simpFunction dnfCuts
+            let (otfSimps', afterSimps') = splitAt 2 $ take simp simpFunctions'
+            let simpFunction' = foldl (>=>) return afterSimps'
+            let otfFunction' = foldl (>=>) return otfSimps'
+ 
+            let (fc0, fcs) = formulaToCut f
+            let addedTransitions = S.fromList (transitions net)
+            let addedCut = (fc0, addedTransitions : fcs)
+            simpCutsWithFormula <- combine otfFunction' [addedCut] simpCuts
+            simpCuts' <- simpFunction' simpCutsWithFormula
+            return simpCuts'
         where
             combine simpFunction cs1 cs2 =
                 simpFunction [ (c1c0 `S.union` c2c0, c1cs ++ c2cs)
@@ -81,7 +100,7 @@ filterTransitions :: S.Set Transition -> SimpleCut -> (Bool, SimpleCut)
 filterTransitions ts (c0, cs) =
         let c0' = c0 `S.difference` ts
             cs' = filter (S.null . S.intersection ts) cs
-            changed = not $ all (S.null . S.intersection ts) cs
+            changed = c0 /= c0' || cs /= cs'
         in  (changed, (c0', cs'))
 
 invariantTransitions :: PetriNet -> [Transition]
@@ -168,28 +187,28 @@ formulaToCut = transformF
             transformTerm t =
                 error $ "term not supported for invariant: " ++ show t
 
-checkCut :: PetriNet -> SimpleCut -> OptIO Bool
-checkCut net cut = do
-        r <- checkSat $ checkTransitionInvariantWithSimpleCutSat net cut
-        return $ isNothing r
+checkCut :: PetriNet -> Formula Transition -> SimpleCut -> OptIO Bool
+checkCut net f cut =
+        liftM isNothing $ checkSat $ checkTransitionInvariantWithSimpleCutSat net f cut
 
-greedySimplifyCut :: PetriNet -> Bool -> SimpleCut -> SimpleCut-> OptIO (Bool, SimpleCut)
-greedySimplifyCut net changed cutAcc@(c0Acc, csAcc) (c0, cs) =
+greedySimplifyCut :: PetriNet -> Formula Transition -> Bool -> SimpleCut ->
+        SimpleCut-> OptIO (Bool, SimpleCut)
+greedySimplifyCut net f changed cutAcc@(c0Acc, csAcc) (c0, cs) =
         case (S.null c0, cs) of
             (True, []) -> return (changed, cutAcc)
             (False, _) -> do
                 let (c, c0') = S.deleteFindMin c0
                 let cut = (c0Acc `S.union` c0', csAcc ++ cs)
-                r <- checkCut net cut
-                greedySimplifyCut net (r || changed)
+                r <- checkCut net f cut
+                greedySimplifyCut net f (r || changed)
                     (if r then cutAcc else (S.insert c c0Acc, csAcc)) (c0', cs)
             (True, c:cs') -> do
                 let cut = (c0Acc `S.union` c0, csAcc ++ cs')
-                r <- checkCut net cut
-                greedySimplifyCut net (r || changed)
+                r <- checkCut net f cut
+                greedySimplifyCut net f (r || changed)
                     (if r then cutAcc else (c0Acc, c:csAcc)) (c0, cs')
 
-greedySimplify :: PetriNet -> [SimpleCut] -> OptIO [SimpleCut]
-greedySimplify net =
-        simplifyWithFilter (greedySimplifyCut net False (S.empty, [])) isMoreGeneralCut
+greedySimplify :: PetriNet -> Formula Transition -> [SimpleCut] -> OptIO [SimpleCut]
+greedySimplify net f =
+        simplifyWithFilter (greedySimplifyCut net f False (S.empty, [])) isMoreGeneralCut
 

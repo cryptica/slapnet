@@ -72,19 +72,20 @@ checkTransitionInvariantSat net f cuts =
             \fm -> checkTransitionInvariant net f cuts (fmap fm x),
             \fm -> firingVectorFromAssignment (fmap fm x))
 
-checkTransitionInvariantWithSimpleCut :: PetriNet ->
+checkTransitionInvariantWithSimpleCut :: PetriNet -> Formula Transition ->
         SimpleCut -> SIMap Transition -> SBool
-checkTransitionInvariantWithSimpleCut net cut x =
+checkTransitionInvariantWithSimpleCut net f cut x =
         transitionVectorConstraints net x &&&
+        evaluateFormula f x &&&
         checkSimpleCut cut x
 
-checkTransitionInvariantWithSimpleCutSat :: PetriNet -> SimpleCut ->
+checkTransitionInvariantWithSimpleCutSat :: PetriNet -> Formula Transition -> SimpleCut ->
         ConstraintProblem Integer FiringVector
-checkTransitionInvariantWithSimpleCutSat net cut =
+checkTransitionInvariantWithSimpleCutSat net f cut =
         let x = makeVarMap $ transitions net
         in  ("transition invariant constraints with simple cut", "transition invariant",
             getNames x,
-            \fm -> checkTransitionInvariantWithSimpleCut net cut (fmap fm x),
+            \fm -> checkTransitionInvariantWithSimpleCut net f cut (fmap fm x),
             \fm -> firingVectorFromAssignment (fmap fm x))
 
 firingVectorFromAssignment :: IMap Transition -> FiringVector
