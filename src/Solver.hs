@@ -32,7 +32,7 @@ symConstraints vars constraint = do
 checkSat :: (SatModel a, SymWord a, Show a, Show b) =>
         ConstraintProblem a b -> OptIO (Maybe b)
 checkSat (problemName, resultName, vars, constraint, interpretation) = do
-        verbosePut 1 $ "Checking SAT of " ++ problemName
+        verbosePut 2 $ "Checking SAT of " ++ problemName
         verbosity <- opt optVerbosity
         result <- liftIO (satWith z3{verbose=verbosity >= 4}
                     (symConstraints vars constraint))
