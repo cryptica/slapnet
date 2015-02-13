@@ -9,6 +9,7 @@ import Data.List (partition)
 import Data.Maybe
 import qualified Data.ByteString.Lazy as L
 import Control.Monad.Reader
+import qualified Data.Set as S
 
 import Util
 import Options
@@ -291,7 +292,7 @@ getLivenessInvariant :: PetriNet -> Formula Transition -> [Cut] -> OptIO (Maybe 
 getLivenessInvariant net f cuts = do
         dnfCuts <- generateCuts net f cuts
         verbosePut 2 $ "Number of disjuncts: " ++ show (length dnfCuts)
-        rs <- mapM (checkSat . checkLivenessInvariantSat net) dnfCuts
+        rs <- parallelIO (map (checkSat . checkLivenessInvariantSat net f) dnfCuts)
         let added = map (Just . cutToLivenessInvariant) cuts
         return $ sequence (rs ++ added)
 

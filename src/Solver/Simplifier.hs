@@ -3,6 +3,8 @@ module Solver.Simplifier (
     ,SimpleCut
     ,generateCuts
     ,greedySimplify
+    ,formulaToCut
+    ,simplifyPositiveCut
 ) where
 
 import Data.SBV
@@ -53,7 +55,7 @@ checkSubsumptionSat c0 cs =
 cutTransitions :: SimpleCut -> S.Set Transition
 cutTransitions (c0, cs) = S.unions (c0:cs)
 
-type SimpConfig = ([[SimpleCut] -> OptIO [SimpleCut]], SimpleCut, SimpleCut, Int)
+type SimpConfig = ([[SimpleCut] -> OptIO [SimpleCut]], SimpleCut, Int)
 
 simpWithoutFormula :: PetriNet -> Formula Transition -> SimpConfig
 simpWithoutFormula net f =
@@ -65,7 +67,6 @@ simpWithoutFormula net f =
         , simplifyBySubsumption
         ]
         , (S.empty, [])
-        , second (S.fromList (transitions net) :) (formulaToCut f)
         , 2
         )
 
@@ -80,20 +81,18 @@ simpWithFormula net f =
         , simplifyBySubsumption
         ]
         , second (S.fromList (transitions net) :) (formulaToCut f)
-        , (S.empty, [])
         , 2
         )
 
 applySimpConfig :: SimpConfig -> [Cut] -> OptIO [SimpleCut]
-applySimpConfig (simpFunctions, initialCut, afterCut, otfIndex) cuts = do
+applySimpConfig (simpFunctions, initialCut, otfIndex) cuts = do
             simp <- opt optSimpFormula
             let (otfSimps, afterSimps) = splitAt otfIndex $ take simp simpFunctions
             let simpFunction = foldl (>=>) return afterSimps
             let otfFunction = foldl (>=>) return otfSimps
             let cnfCuts = map cutToSimpleDNFCuts cuts
             dnfCuts <- foldM (combine otfFunction) [initialCut] cnfCuts
-            simpCuts <- simpFunction dnfCuts
-            combine otfFunction [afterCut] simpCuts
+            simpFunction dnfCuts
         where
             combine simpFunction cs1 cs2 =
                 simpFunction [ (c1c0 `S.union` c2c0, c1cs ++ c2cs)

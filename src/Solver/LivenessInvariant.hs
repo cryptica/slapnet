@@ -13,6 +13,7 @@ import qualified Data.Set as S
 import Util
 import Solver
 import Solver.Simplifier
+import Property
 import PetriNet
 
 data LivenessInvariant =
@@ -82,9 +83,12 @@ checkLivenessInvariant net (comp0, comps) m =
               addComp (n, _) = val m n
               checkNonNegativity x = val m x .>= 0
 
-checkLivenessInvariantSat :: PetriNet -> SimpleCut -> ConstraintProblem Integer LivenessInvariant
-checkLivenessInvariantSat net cut =
-        let namedCut = nameCut cut
+checkLivenessInvariantSat :: PetriNet -> Formula Transition -> SimpleCut -> ConstraintProblem Integer LivenessInvariant
+checkLivenessInvariantSat net f (c0, cs) =
+        -- TODO: use own variables for formula cut
+        let (f0, fs) = formulaToCut f
+            cut = (c0 `S.union` f0, simplifyPositiveCut (cs ++ fs))
+            namedCut = nameCut cut
             names = cutNames net namedCut
             myVarMap fvm = M.fromList $ names `zip` fmap fvm names
         in  ("liveness invariant constraints", "liveness invariant",
