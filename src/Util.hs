@@ -5,15 +5,16 @@ module Util
      listSet,listMap,val,vals,mval,zeroVal,positiveVal,sumVal,
      makeVarMap,makeVarMapWith,buildVector,makeVector,getNames,
      Vector,Model,VarMap,SIMap,SBMap,IMap,BMap,showWeighted,
-     OptIO,verbosePut,opt,putLine)
+     OptIO,verbosePut,opt,putLine,parallelIO)
 where
 
 import Data.SBV
 import qualified Data.Map as M
-import Control.Monad
 import Data.List
 import Data.Ord
 import Data.Function
+import Control.Concurrent.ParallelIO
+import Control.Monad
 import Control.Monad.Reader
 import System.IO
 
@@ -114,6 +115,11 @@ verbosePut level str = do
 
 putLine :: String -> OptIO ()
 putLine = liftIO . putStrLn
+
+parallelIO :: [OptIO a] -> OptIO [a]
+parallelIO tasks = do
+        opts <- ask
+        liftIO $ parallel $ map (`runReaderT` opts) tasks
 
 {-
 - String functions

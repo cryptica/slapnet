@@ -3,6 +3,7 @@ module Main where
 import System.Exit
 import System.IO
 import Control.Monad
+import Control.Concurrent.ParallelIO
 import Control.Arrow (first)
 import Data.List (partition)
 import Data.Maybe
@@ -405,14 +406,19 @@ main = do
 exitSuccessWith :: String -> IO ()
 exitSuccessWith msg = do
         putStrLn msg
-        exitSuccess
+        cleanupAndExitWith ExitSuccess
 
 exitFailureWith :: String -> IO ()
 exitFailureWith msg = do
         putStrLn msg
-        exitWith $ ExitFailure 2
+        cleanupAndExitWith $ ExitFailure 2
 
 exitErrorWith :: String -> IO ()
 exitErrorWith msg = do
         hPutStrLn stderr msg
-        exitWith $ ExitFailure 3
+        cleanupAndExitWith $ ExitFailure 3
+
+cleanupAndExitWith :: ExitCode -> IO ()
+cleanupAndExitWith code = do
+        stopGlobalPool
+        exitWith code

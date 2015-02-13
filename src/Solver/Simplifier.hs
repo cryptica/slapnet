@@ -7,6 +7,9 @@ module Solver.Simplifier (
 
 import Data.SBV
 import Data.Maybe
+import Data.Ord (comparing)
+import Data.List (minimumBy)
+import Control.Arrow (second)
 import Control.Monad
 import Control.Monad.Identity
 import qualified Data.Map as M
@@ -50,46 +53,65 @@ checkSubsumptionSat c0 cs =
 cutTransitions :: SimpleCut -> S.Set Transition
 cutTransitions (c0, cs) = S.unions (c0:cs)
 
-generateCuts :: PetriNet -> Formula Transition -> [Cut] -> OptIO [SimpleCut]
-generateCuts net f cuts = do
-            simp <- opt optSimpFormula
+type SimpConfig = ([[SimpleCut] -> OptIO [SimpleCut]], SimpleCut, SimpleCut, Int)
 
-            let simpFunctions =
-                    [ return . simplifyCuts
-                    , return . removeImplicants
-                    , simplifyBySubsumption
-                    , greedySimplify net f
-                    , simplifyBySubsumption
-                    ]
-            let (otfSimps, afterSimps) = splitAt 2 $ take simp simpFunctions
+simpWithoutFormula :: PetriNet -> Formula Transition -> SimpConfig
+simpWithoutFormula net f =
+        (
+        [ return . simplifyCuts
+        , return . removeImplicants
+        , greedySimplify net f
+        , return . combineCuts
+        , simplifyBySubsumption
+        ]
+        , (S.empty, [])
+        , second (S.fromList (transitions net) :) (formulaToCut f)
+        , 2
+        )
+
+simpWithFormula :: PetriNet -> Formula Transition -> SimpConfig
+simpWithFormula net f =
+        (
+        [ return . simplifyCuts
+        , return . removeImplicants
+        , return . filterInvariantTransitions net
+        , greedySimplify net FTrue
+        , return . combineCuts
+        , simplifyBySubsumption
+        ]
+        , second (S.fromList (transitions net) :) (formulaToCut f)
+        , (S.empty, [])
+        , 2
+        )
+
+applySimpConfig :: SimpConfig -> [Cut] -> OptIO [SimpleCut]
+applySimpConfig (simpFunctions, initialCut, afterCut, otfIndex) cuts = do
+            simp <- opt optSimpFormula
+            let (otfSimps, afterSimps) = splitAt otfIndex $ take simp simpFunctions
             let simpFunction = foldl (>=>) return afterSimps
             let otfFunction = foldl (>=>) return otfSimps
             let cnfCuts = map cutToSimpleDNFCuts cuts
-            dnfCuts <- foldM (combine otfFunction) [(S.empty, [])] cnfCuts
+            dnfCuts <- foldM (combine otfFunction) [initialCut] cnfCuts
             simpCuts <- simpFunction dnfCuts
-
-            let simpFunctions' =
-                    [ return . simplifyCuts
-                    , return . removeImplicants
-                    , return . filterInvariantTransitions net
-                    , simplifyBySubsumption
-                    , greedySimplify net FTrue
-                    , simplifyBySubsumption
-                    ]
-            let (otfSimps', afterSimps') = splitAt 2 $ take simp simpFunctions'
-            let simpFunction' = foldl (>=>) return afterSimps'
-            let otfFunction' = foldl (>=>) return otfSimps'
- 
-            let (fc0, fcs) = formulaToCut f
-            let addedTransitions = S.fromList (transitions net)
-            let addedCut = (fc0, addedTransitions : fcs)
-            simpCutsWithFormula <- combine otfFunction' [addedCut] simpCuts
-            simpCuts' <- simpFunction' simpCutsWithFormula
-            return simpCuts'
+            combine otfFunction [afterCut] simpCuts
         where
             combine simpFunction cs1 cs2 =
                 simpFunction [ (c1c0 `S.union` c2c0, c1cs ++ c2cs)
                              | (c1c0, c1cs) <- cs1, (c2c0, c2cs) <- cs2 ]
+
+generateCuts :: PetriNet -> Formula Transition -> [Cut] -> OptIO [SimpleCut]
+generateCuts net f cuts = do
+        let configs = [simpWithFormula, simpWithoutFormula]
+        let tasks = map (\c -> applySimpConfig (c net f) cuts) configs
+        rs <- parallelIO tasks
+        return $ minimumBy (comparing length) rs
+
+combineCuts :: [SimpleCut] -> [SimpleCut]
+combineCuts cuts =
+            M.toList $ M.fromListWith combineFunc cuts
+        where
+            combineFunc cs cs' =
+                simplifyPositiveCut [ c `S.union` c' | c <- cs, c' <- cs' ]
 
 filterInvariantTransitions :: PetriNet -> [SimpleCut] -> [SimpleCut]
 filterInvariantTransitions net =
@@ -115,11 +137,14 @@ simplifyCuts = mapMaybe simplifyCut
 simplifyCut :: SimpleCut -> Maybe SimpleCut
 simplifyCut (c0, cs) =
         let remove b a = a `S.difference` b
-            cs' = removeWith S.isSubsetOf $ map (remove c0) cs
+            cs' = simplifyPositiveCut $ map (remove c0) cs
         in  if any S.null cs' then
                 Nothing
             else
                 Just (c0, cs')
+
+simplifyPositiveCut :: [S.Set Transition] -> [S.Set Transition]
+simplifyPositiveCut = removeWith S.isSubsetOf 
 
 simplifyBySubsumption :: [SimpleCut] -> OptIO [SimpleCut]
 simplifyBySubsumption = simplifyBySubsumption' []

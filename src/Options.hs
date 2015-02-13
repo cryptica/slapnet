@@ -59,7 +59,7 @@ startOptions = Options { inputFormat = PNET
                        , optShowVersion = False
                        , optProperties = []
                        , optTransformations = []
-                       , optSimpFormula = 6
+                       , optSimpFormula = 100
                        , optRefinementType = Just SComponentWithCutRefinement
                        , optMinimizeRefinement = 0
                        , optInvariant = False
