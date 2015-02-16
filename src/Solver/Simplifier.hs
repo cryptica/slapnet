@@ -103,13 +103,16 @@ applySimpConfig (simpFunctions, initialCut, otfIndex) cuts = do
 generateCuts :: PetriNet -> Formula Transition -> [Cut] -> OptIO [SimpleCut]
 generateCuts net f cuts = do
         let configs = [noSimp, simpWithFormula, simpWithoutFormula]
-        simp <- opt optSimpFormula
-        let simpConfig | simp < 0 = drop 1 configs
-                       | simp >= length configs = error ("Invalid simplification: " ++ show simp)
-                       | otherwise = [configs !! simp]
+        auto <- opt optAuto
+        simp <- opt optSimpMethod
+        let simpConfig | auto = drop 1 configs
+                       | simp >= 0 && simp < length configs = [configs !! simp]
+                       | otherwise =
+                           error ("Invalid simplification: " ++ show simp)
         let tasks = map (\c -> applySimpConfig (c net f) cuts) simpConfig
         rs <- parallelIO tasks
-        verbosePut 2 $ "Number of disjuncts in simplified versions: " ++ show (map length rs)
+        when auto $ verbosePut 2 $
+            "Number of disjuncts in tested simplifications: " ++ show (map length rs)
         return $ minimumBy (comparing length) rs
 
 combineCuts :: [SimpleCut] -> [SimpleCut]

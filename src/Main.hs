@@ -5,7 +5,8 @@ import System.IO
 import Control.Monad
 import Control.Concurrent.ParallelIO
 import Control.Arrow (first)
-import Data.List (partition)
+import Data.List (partition,minimumBy)
+import Data.Ord (comparing)
 import Data.Maybe
 import qualified Data.ByteString.Lazy as L
 import Control.Monad.Reader
@@ -231,22 +232,35 @@ checkSafetyProperty net f = do
             (Nothing, traps) -> do
                 invariant <- opt optInvariant
                 if invariant then
-                    checkSat (checkSafetyInvariantSat net f traps) >>= printInvariant
+                    getSafetyInvariant net f traps >>= printInvariant
                 else
                     return Satisfied
             (Just _, _) ->
                 return Unknown
 
-printInvariant :: (Show a, Invariant a) => Maybe [a] -> OptIO PropResult
-printInvariant invResult =
-        case invResult of
+getSafetyInvariant :: PetriNet -> Formula Place -> [Trap] ->
+        OptIO (Maybe [SafetyInvariant], [SafetyInvariant])
+getSafetyInvariant net f traps = do
+        r <- checkSat $ checkSafetyInvariantSat net f traps
+        let trapInvs = map trapToSafetyInvariant traps
+        return (sequence [r], trapInvs)
+
+printInvariant :: (Show a, Invariant a) => (Maybe [a], [a]) -> OptIO PropResult
+printInvariant (baseInvResult, addedInv) =
+        case baseInvResult of
             Nothing -> do
                 verbosePut 0 "No invariant found"
                 return Unknown
-            Just inv -> do
+            Just baseInv -> do
                 verbosePut 0 "Invariant found"
-                verbosePut 2 $ "Number of atoms in invariants: " ++ show (map invariantSize inv)
-                mapM_ (putLine . show) inv
+                let baseSize = map invariantSize baseInv
+                let addedSize = map invariantSize addedInv
+                verbosePut 2 $ "Number of atoms in base invariants: " ++ show baseSize ++
+                        " (total of " ++ show (sum baseSize)
+                verbosePut 2 $ "Number of atoms in added invariants: " ++ show addedSize ++
+                        " (total of " ++ show (sum addedSize)
+                mapM_ (putLine . show) baseInv
+                mapM_ (putLine . show) addedInv
                 return Satisfied
 
 checkSafetyProperty' :: PetriNet ->
@@ -272,28 +286,58 @@ refineSafetyProperty net f traps m = do
             Just trap ->
                 checkSafetyProperty' net f (trap:traps)
 
+applyRefinementMethod :: RefinementMethod -> Options -> Options
+applyRefinementMethod (rtype, mtype) opts =
+        opts { optRefinementType = rtype, optMinimizeRefinement = mtype }
+
+type RefinementMethod = (Maybe RefinementType, Int)
+
+refinementMethods :: [RefinementMethod]
+refinementMethods =
+        [(Just SComponentRefinement, 0)
+        ,(Just SComponentRefinement, 1)
+        ,(Just SComponentWithCutRefinement, 1)
+        ,(Just SComponentWithCutRefinement, 2)
+        ,(Just SComponentWithCutRefinement, 3)
+        ,(Just SComponentWithCutRefinement, 4)
+        ]
+
 checkLivenessProperty :: PetriNet ->
         Formula Transition -> OptIO PropResult
 checkLivenessProperty net f = do
-        (r, cuts) <- checkLivenessProperty' net f []
-        verbosePut 2 $ "Number of refinements: " ++ show (length cuts)
+        let methods = map (local . applyRefinementMethod) refinementMethods
+        auto <- opt optAuto
+        r <-
+            if auto then do
+                rAll <- mapM ($ checkLivenessProperty' net f []) methods
+                verbosePut 2 $
+                    "Number of refinements in tested methods: " ++ show (map (length . snd) rAll)
+                let rSucc = filter (isNothing . fst) rAll
+                if null rSucc then
+                    return (Nothing, [])
+                else
+                    return $ minimumBy (comparing (length . snd)) rSucc
+            else
+                checkLivenessProperty' net f []
         case r of
-            Nothing -> do
+            (Nothing, cuts) -> do
+                verbosePut 2 $ "Number of refinements: " ++ show (length cuts)
                 invariant <- opt optInvariant
                 if invariant then
                     getLivenessInvariant net f cuts >>= printInvariant
                 else
                     return Satisfied
-            Just _ ->
+            (Just _, _) ->
                 return Unknown
 
-getLivenessInvariant :: PetriNet -> Formula Transition -> [Cut] -> OptIO (Maybe [LivenessInvariant])
+getLivenessInvariant :: PetriNet -> Formula Transition -> [Cut] ->
+        OptIO (Maybe [LivenessInvariant], [LivenessInvariant])
 getLivenessInvariant net f cuts = do
         dnfCuts <- generateCuts net f cuts
         verbosePut 2 $ "Number of disjuncts: " ++ show (length dnfCuts)
         invs <- parallelIO (map (checkSat . checkLivenessInvariantSat net f) dnfCuts)
-        let cutInvs = map (Just . cutToLivenessInvariant) cuts
-        return $ sequence (invs ++ cutInvs)
+        let cutInvs = map cutToLivenessInvariant cuts
+        return (sequence invs, cutInvs)
 
 checkLivenessProperty' :: PetriNet ->
         Formula Transition -> [Cut] -> OptIO (Maybe FiringVector, [Cut])

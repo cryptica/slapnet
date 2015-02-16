@@ -1,6 +1,7 @@
 module Solver.SafetyInvariant (
     checkSafetyInvariantSat
   , SafetyInvariant
+  , trapToSafetyInvariant
 ) where
 
 import Data.SBV
@@ -13,25 +14,24 @@ import Solver
 import Property
 import PetriNet
 
-type NamedTrap = (String, Trap)
 type SimpleTerm = (Vector Place, Integer)
 type NamedTerm = (String, SimpleTerm)
 
 data SafetyInvariant =
-            SafetyPlaceInvariant NamedTerm
-          | SafetyTrapInvariant NamedTrap
+            SafetyPlaceInvariant SimpleTerm
+          | SafetyTrapInvariant Trap
 
 instance Show SafetyInvariant where
-        show (SafetyPlaceInvariant (n, (ps, c))) = n ++ ": " ++
+        show (SafetyPlaceInvariant (ps, c)) =
                     intercalate " + " (map showWeighted (items ps)) ++
                     " ≤ " ++ show c
-        show (SafetyTrapInvariant (n, ps)) = n ++ ": " ++
+        show (SafetyTrapInvariant ps) =
                     intercalate " + " (map show ps) ++
                     " ≥ 1"
 
 instance Invariant SafetyInvariant where
-        invariantSize (SafetyPlaceInvariant (_, (ps, _))) = size ps
-        invariantSize (SafetyTrapInvariant (_, ps)) = length ps
+        invariantSize (SafetyPlaceInvariant (ps, _)) = size ps
+        invariantSize (SafetyTrapInvariant ps) = length ps
 
 formulaToSimpleTerms :: Formula Place -> [SimpleTerm]
 formulaToSimpleTerms = transformF
@@ -103,7 +103,7 @@ checkSafetyInvariant net terms lambda y =
 
 -- TODO: split up into many smaller sat problems
 checkSafetyInvariantSat :: PetriNet -> Formula Place -> [Trap] ->
-        ConstraintProblem Integer [SafetyInvariant]
+        ConstraintProblem Integer SafetyInvariant
 checkSafetyInvariantSat net f traps =
         let formTerms = formulaToSimpleTerms f
             namedTraps = numPref "@trap" `zip` traps
@@ -117,12 +117,14 @@ checkSafetyInvariantSat net f traps =
              getNames lambda ++ names,
              \fm -> checkSafetyInvariant net namedTerms
                 (fmap fm lambda) (myVarMap fm),
-             \fm -> getSafetyInvariant net namedTraps (fmap fm lambda))
+             \fm -> getSafetyInvariant net (fmap fm lambda))
 
-getSafetyInvariant :: PetriNet -> [NamedTrap] -> IMap Place ->
-        [SafetyInvariant]
-getSafetyInvariant net namedTraps lambda =
-            placeInv : map SafetyTrapInvariant namedTraps
-        where placeInv = SafetyPlaceInvariant
-                ("@safe", (buildVector (items lambda),
-                 sum (map (\(p,i) -> val lambda p * i) (linitials net))))
+trapToSafetyInvariant :: Trap -> SafetyInvariant
+trapToSafetyInvariant = SafetyTrapInvariant
+
+getSafetyInvariant :: PetriNet -> IMap Place ->
+        SafetyInvariant
+getSafetyInvariant net lambda =
+        SafetyPlaceInvariant
+            (buildVector (items lambda),
+             sum (map (\(p,i) -> val lambda p * i) (linitials net)))

@@ -42,9 +42,10 @@ data Options = Options { inputFormat :: InputFormat
                        , optShowVersion :: Bool
                        , optProperties :: [ImplicitProperty]
                        , optTransformations :: [NetTransformation]
-                       , optSimpFormula :: Int
+                       , optSimpMethod :: Int
                        , optRefinementType :: Maybe RefinementType
                        , optMinimizeRefinement :: Int
+                       , optAuto :: Bool
                        , optInvariant :: Bool
                        , optOutput :: Maybe String
                        , outputFormat :: OutputFormat
@@ -59,9 +60,10 @@ startOptions = Options { inputFormat = PNET
                        , optShowVersion = False
                        , optProperties = []
                        , optTransformations = []
-                       , optSimpFormula = -1
+                       , optSimpMethod = 1
                        , optRefinementType = Just SComponentWithCutRefinement
                        , optMinimizeRefinement = 0
+                       , optAuto = False
                        , optInvariant = False
                        , optOutput = Nothing
                        , outputFormat = OutLOLA
@@ -219,23 +221,22 @@ options =
         "Do not use the properties given in the input file"
 
         , Option "s" ["simp"]
-        (ReqArg (\arg opt -> case (arg, reads arg) of
-                    ("auto", _) -> Right opt { optSimpFormula = -1 }
-                    (_, [(i, "")]) -> Right opt { optSimpFormula = i }
-                    _ -> Left ("invalid argument for simplification level: " ++ arg)
+        (ReqArg (\arg opt -> case reads arg of
+                    [(i, "")] -> Right opt { optSimpMethod = i }
+                    _ -> Left ("invalid argument for simplification method: " ++ arg)
                 )
                 "METHOD")
-        "Simply formula with method METHOD (0-2 or auto)"
+        "Simply formula with method METHOD (0-2)"
 
         , Option "" ["simp-1"]
         (NoArg (\opt -> Right opt {
-                   optSimpFormula = 1
+                   optSimpMethod = 1
                }))
         "Use simplification level 1 for invariant generation"
 
         , Option "" ["simp-2"]
         (NoArg (\opt -> Right opt {
-                   optSimpFormula = 2
+                   optSimpMethod = 2
                }))
         "Use simplification level 2 for invariant generation"
 
@@ -247,7 +248,11 @@ options =
                             _ -> Left ("invalid argument for minimization method: " ++ is)
                 )
                 "METHOD")
-        "Minimize size of refinement structure by method METHOD"
+        "Minimize size of refinement structure by method METHOD (1-4)"
+
+        , Option "" ["auto"]
+        (NoArg (\opt -> Right opt { optAuto = True }))
+        "Automatically find best refinement, minimization and simplification method"
 
         , Option "v" ["verbose"]
         (NoArg (\opt -> Right opt { optVerbosity = optVerbosity opt + 1 }))
