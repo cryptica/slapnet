@@ -108,8 +108,13 @@ checkFile file = do
         let (net',props''') = foldl transformNet (net,props'') transformations
         verbosePut 1 $ "Analyzing " ++ showNetName net
         verbosePut 2 $
-                "Places: " ++ show (length  $ places net') ++ "; " ++
-                "Transitions: " ++ show (length $ transitions net')
+                "Number of places: " ++ show (length (places net'))
+        verbosePut 2 $
+                "Number of transitions: " ++ show (length (transitions net'))
+        let pRowSize p = let (preP, postP) = context net' p in length preP + length postP
+        let arcs = sum $ map pRowSize $ places net'
+        verbosePut 2 $
+                "Number of arcs: " ++ show arcs
         printStruct <- opt optPrintStructure
         when printStruct $ structuralAnalysis net
         verbosePut 3 $ show net'
@@ -256,9 +261,9 @@ printInvariant (baseInvResult, addedInv) =
                 let baseSize = map invariantSize baseInv
                 let addedSize = map invariantSize addedInv
                 verbosePut 2 $ "Number of atoms in base invariants: " ++ show baseSize ++
-                        " (total of " ++ show (sum baseSize)
+                        " (total of " ++ show (sum baseSize) ++ ")"
                 verbosePut 2 $ "Number of atoms in added invariants: " ++ show addedSize ++
-                        " (total of " ++ show (sum addedSize)
+                        " (total of " ++ show (sum addedSize) ++ ")"
                 mapM_ (putLine . show) baseInv
                 mapM_ (putLine . show) addedInv
                 return Satisfied
