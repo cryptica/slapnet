@@ -82,29 +82,21 @@ checkSizeLimit p1 p2 t0 t1 t2 (Just (minMethod, (p1Size, p2Size, t0Size, t1Size,
             t1SizeNow = literal t1Size
             t2SizeNow = literal t2Size
         in  case minMethod of
-                1 -> (p1SizeNext + p2SizeNext .< p1SizeNow + p2SizeNow) |||
-                    (p1SizeNext + p2SizeNext .== p1SizeNow + p2SizeNow &&&
-                        t0SizeNext .< t0SizeNow) |||
-                    (p1SizeNext + p2SizeNext .== p1SizeNow + p2SizeNow &&&
-                        t0SizeNext .== t0SizeNow &&&
-                        t1SizeNext .> t1SizeNow &&& t2SizeNext .>= t2SizeNow) |||
-                    (p1SizeNext + p2SizeNext .== p1SizeNow + p2SizeNow &&&
-                        t0SizeNext .== t0SizeNow &&&
-                        t1SizeNext .>= t1SizeNow &&& t2SizeNext .> t2SizeNow)
-                2 -> (t0SizeNext .< t0SizeNow) |||
+                1 -> (t0SizeNext .< t0SizeNow) |||
                     (t0SizeNext .== t0SizeNow &&&
                         t1SizeNext .> t1SizeNow &&& t2SizeNext .>= t2SizeNow) |||
                     (t0SizeNext .== t0SizeNow &&&
                         t1SizeNext .>= t1SizeNow &&& t2SizeNext .> t2SizeNow)
-                3 -> (t1SizeNext .> t1SizeNow &&& t2SizeNext .>= t2SizeNow) |||
+                2 -> (t1SizeNext .> t1SizeNow &&& t2SizeNext .>= t2SizeNow) |||
                     (t1SizeNext .>= t1SizeNow &&& t2SizeNext .> t2SizeNow) |||
                     (t1SizeNext .== t1SizeNow &&& t2SizeNext .== t2SizeNow &&&
                         t0SizeNext .< t0SizeNow)
-                4 -> (t0SizeNext .< t0SizeNow) |||
-                    (t0SizeNext .== t0SizeNow &&&
-                        t1SizeNext .> t1SizeNow &&& t2SizeNext .>= t2SizeNow) |||
-                    (t0SizeNext .== t0SizeNow &&&
-                        t1SizeNext .>= t1SizeNow &&& t2SizeNext .> t2SizeNow)
+                3 -> (p1SizeNext + p2SizeNext .< p1SizeNow + p2SizeNow) |||
+                    (p1SizeNext + p2SizeNext .== p1SizeNow + p2SizeNow &&&
+                        t0SizeNext .< t0SizeNow)
+                4 -> (p1SizeNext + p2SizeNext .> p1SizeNow + p2SizeNow) |||
+                    (p1SizeNext + p2SizeNext .== p1SizeNow + p2SizeNow &&&
+                        t0SizeNext .< t0SizeNow)
                 _ -> error $ "minimization method " ++ show minMethod ++ " not supported"
 
 checkSComponent :: PetriNet -> FiringVector -> Maybe (Int, SizeIndicator) ->

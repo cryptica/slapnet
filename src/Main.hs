@@ -300,11 +300,8 @@ type RefinementMethod = (Maybe RefinementType, Int)
 refinementMethods :: [RefinementMethod]
 refinementMethods =
         [(Just SComponentRefinement, 0)
-        ,(Just SComponentRefinement, 1)
         ,(Just SComponentWithCutRefinement, 1)
         ,(Just SComponentWithCutRefinement, 2)
-        ,(Just SComponentWithCutRefinement, 3)
-        ,(Just SComponentWithCutRefinement, 4)
         ]
 
 checkLivenessProperty :: PetriNet ->
