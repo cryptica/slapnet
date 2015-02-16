@@ -241,11 +241,9 @@ options =
         "Use simplification level 2 for invariant generation"
 
         , Option "m" ["minimize"]
-        (OptArg (\arg opt -> case arg of
-                    Nothing -> Right opt { optMinimizeRefinement = 1 }
-                    Just is -> case reads is of
-                            [(i, "")] | i >= 1 -> Right opt { optMinimizeRefinement = i }
-                            _ -> Left ("invalid argument for minimization method: " ++ is)
+        (ReqArg (\arg opt -> case reads arg of
+                        [(i, "")] -> Right opt { optMinimizeRefinement = i }
+                        _ -> Left ("invalid argument for minimization method: " ++ arg)
                 )
                 "METHOD")
         "Minimize size of refinement structure by method METHOD (1-4)"
