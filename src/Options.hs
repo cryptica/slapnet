@@ -59,7 +59,7 @@ startOptions = Options { inputFormat = PNET
                        , optShowVersion = False
                        , optProperties = []
                        , optTransformations = []
-                       , optSimpFormula = 100
+                       , optSimpFormula = -1
                        , optRefinementType = Just SComponentWithCutRefinement
                        , optMinimizeRefinement = 0
                        , optInvariant = False
@@ -219,12 +219,13 @@ options =
         "Do not use the properties given in the input file"
 
         , Option "s" ["simp"]
-        (ReqArg (\arg opt -> case reads arg of
-                    [(i, "")] -> Right opt { optSimpFormula = i }
+        (ReqArg (\arg opt -> case (arg, reads arg) of
+                    ("auto", _) -> Right opt { optSimpFormula = -1 }
+                    (_, [(i, "")]) -> Right opt { optSimpFormula = i }
                     _ -> Left ("invalid argument for simplification level: " ++ arg)
                 )
-                "LEVEL")
-        "Simply formula with level LEVEL"
+                "METHOD")
+        "Simply formula with method METHOD (0-2 or auto)"
 
         , Option "" ["simp-1"]
         (NoArg (\opt -> Right opt {

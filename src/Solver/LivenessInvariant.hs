@@ -1,6 +1,7 @@
 module Solver.LivenessInvariant (
     checkLivenessInvariantSat
   , LivenessInvariant
+  , invariantSize
   , cutToLivenessInvariant
   , SimpleCut
 ) where
@@ -19,6 +20,12 @@ import PetriNet
 data LivenessInvariant =
             RankingFunction (SimpleCut, Vector Place)
           | ComponentCut (SimpleCut, [Trap])
+
+instance Invariant LivenessInvariant where
+        invariantSize (RankingFunction ((c0, cs), ps)) =
+                S.size c0 + sum (map S.size cs) + size ps
+        invariantSize (ComponentCut ((c0, cs), ps)) =
+                S.size c0 + sum (map S.size cs) + sum (map length ps)
 
 showSimpleCuts :: SimpleCut -> String
 showSimpleCuts cs = intercalate " ∧ " (showSimpleCut cs)

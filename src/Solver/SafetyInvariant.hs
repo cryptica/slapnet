@@ -29,6 +29,10 @@ instance Show SafetyInvariant where
                     intercalate " + " (map show ps) ++
                     " ≥ 1"
 
+instance Invariant SafetyInvariant where
+        invariantSize (SafetyPlaceInvariant (_, (ps, _))) = size ps
+        invariantSize (SafetyTrapInvariant (_, ps)) = length ps
+
 formulaToSimpleTerms :: Formula Place -> [SimpleTerm]
 formulaToSimpleTerms = transformF
         where

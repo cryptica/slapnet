@@ -9,7 +9,7 @@ module PetriNet
      pre,lpre,post,lpost,mpre,mpost,context,ghostTransitions,
      makePetriNet,makePetriNetWithTrans,
      makePetriNetFromStrings,makePetriNetWithTransFromStrings,Trap,Cut,
-     constructCut,SimpleCut)
+     constructCut,SimpleCut,Invariant(..))
 where
 
 import qualified Data.Map as M
@@ -63,6 +63,9 @@ type FiringVector = Vector Transition
 type Trap = [Place]
 -- TODO: generalize cut type
 type Cut = ([([Place], [Transition])], [Transition])
+
+class Invariant a where
+        invariantSize :: a -> Int
 
 data PetriNet = PetriNet {
         name :: String,

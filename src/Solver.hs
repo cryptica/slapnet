@@ -54,15 +54,15 @@ checkSatMin minProblem = do
         r0 <- checkSat $ minProblem Nothing
         case r0 of
             Nothing -> return Nothing
-            Just (result, size) ->
+            Just (result, curSize) ->
                 if optMin > 0 then
-                    Just <$> findSmaller optMin result size
+                    Just <$> findSmaller optMin result curSize
                 else
                     return $ Just result
-    where findSmaller optMin result size = do
-            verbosePut 2 $ "Checking for size smaller than " ++ show size
-            r1 <- checkSat $ minProblem (Just (optMin, size))
+    where findSmaller optMin result curSize = do
+            verbosePut 2 $ "Checking for size smaller than " ++ show curSize
+            r1 <- checkSat $ minProblem (Just (optMin, curSize))
             case r1 of
                 Nothing -> return result
-                Just (result', size') -> findSmaller optMin result' size'
+                Just (result', curSize') -> findSmaller optMin result' curSize'
 

@@ -1,7 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FunctionalDependencies #-}
 
 module Util
-    (elems,items,emap,prime,numPref,
+    (elems,items,size,emap,prime,numPref,
      listSet,listMap,val,vals,mval,zeroVal,positiveVal,sumVal,
      makeVarMap,makeVarMapWith,buildVector,makeVector,getNames,
      Vector,Model,VarMap,SIMap,SBMap,IMap,BMap,showWeighted,
@@ -37,6 +37,7 @@ class MapLike c a b | c -> a, c -> b where
         vals :: c -> [b]
         elems :: c -> [a]
         items :: c -> [(a,b)]
+        size :: c -> Int
 
         mval :: c -> [a] -> [b]
         mval = map . val
@@ -50,12 +51,14 @@ instance (Ord a, Show a, Show b) => MapLike (M.Map a b) a b where
         vals = M.elems
         items = M.toList
         elems = M.keys
+        size = M.size
 
 instance (Ord a, Show a) => MapLike (Vector a) a Integer where
         val (Vector v) x = M.findWithDefault 0 x v
         vals = vals . getVector
         items = M.toList . getVector
         elems = M.keys . getVector
+        size = M.size . getVector
 
 instance (Show a) => Show (Vector a) where
         show (Vector v) =

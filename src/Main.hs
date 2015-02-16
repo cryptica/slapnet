@@ -9,7 +9,6 @@ import Data.List (partition)
 import Data.Maybe
 import qualified Data.ByteString.Lazy as L
 import Control.Monad.Reader
-import qualified Data.Set as S
 
 import Util
 import Options
@@ -231,15 +230,14 @@ checkSafetyProperty net f = do
         case r of
             (Nothing, traps) -> do
                 invariant <- opt optInvariant
-                if invariant then do
-                    r' <- checkSat $ checkSafetyInvariantSat net f traps
-                    printInvariant r'
+                if invariant then
+                    checkSat (checkSafetyInvariantSat net f traps) >>= printInvariant
                 else
                     return Satisfied
             (Just _, _) ->
                 return Unknown
 
-printInvariant :: (Show a) => Maybe [a] -> OptIO PropResult
+printInvariant :: (Show a, Invariant a) => Maybe [a] -> OptIO PropResult
 printInvariant invResult =
         case invResult of
             Nothing -> do
@@ -247,6 +245,7 @@ printInvariant invResult =
                 return Unknown
             Just inv -> do
                 verbosePut 0 "Invariant found"
+                verbosePut 2 $ "Number of atoms in invariants: " ++ show (map invariantSize inv)
                 mapM_ (putLine . show) inv
                 return Satisfied
 
@@ -292,9 +291,9 @@ getLivenessInvariant :: PetriNet -> Formula Transition -> [Cut] -> OptIO (Maybe 
 getLivenessInvariant net f cuts = do
         dnfCuts <- generateCuts net f cuts
         verbosePut 2 $ "Number of disjuncts: " ++ show (length dnfCuts)
-        rs <- parallelIO (map (checkSat . checkLivenessInvariantSat net f) dnfCuts)
-        let added = map (Just . cutToLivenessInvariant) cuts
-        return $ sequence (rs ++ added)
+        invs <- parallelIO (map (checkSat . checkLivenessInvariantSat net f) dnfCuts)
+        let cutInvs = map (Just . cutToLivenessInvariant) cuts
+        return $ sequence (invs ++ cutInvs)
 
 checkLivenessProperty' :: PetriNet ->
         Formula Transition -> [Cut] -> OptIO (Maybe FiringVector, [Cut])

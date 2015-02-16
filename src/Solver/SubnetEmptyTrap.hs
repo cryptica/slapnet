@@ -22,7 +22,7 @@ properTrap b = sum (vals b) .> 0
 
 checkSizeLimit :: SIMap Place -> Maybe (Int, Integer) -> SBool
 checkSizeLimit _ Nothing = true
-checkSizeLimit b (Just (_, size)) = (.< literal size) $ sumVal b
+checkSizeLimit b (Just (_, curSize)) = (.< literal curSize) $ sumVal b
 
 checkBinary :: SIMap Place -> SBool
 checkBinary = bAnd . map (\x -> x .== 0 ||| x .== 1) . vals

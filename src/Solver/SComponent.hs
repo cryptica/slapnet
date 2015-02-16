@@ -67,7 +67,7 @@ checkBinary p' t' y =
 
 checkSizeLimit :: SIMap Place -> SIMap Transition -> Maybe (Int, Integer) -> SBool
 checkSizeLimit _ _ Nothing = true
-checkSizeLimit p' _ (Just (_, size)) = (.< literal size) $ sumVal p'
+checkSizeLimit p' _ (Just (_, curSize)) = (.< literal curSize) $ sumVal p'
 
 checkSComponent :: PetriNet -> FiringVector -> Maybe (Int, Integer) -> SIMap Place ->
         SIMap Transition -> SIMap Transition -> SBool
@@ -100,6 +100,6 @@ cutFromAssignment net x p' t' y =
             (t1, t2) = partition (\t -> val y t > 0) ts
             s1 = filter (\p -> val p' p > 0) $ mpre net t1
             s2 = filter (\p -> val p' p > 0) $ mpre net t2
-            size = fromIntegral $ M.size $ M.filter (> 0) p'
-        in  (constructCut net x [s1,s2], size)
+            curSize = fromIntegral $ M.size $ M.filter (> 0) p'
+        in  (constructCut net x [s1,s2], curSize)
 

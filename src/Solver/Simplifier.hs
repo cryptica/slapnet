@@ -57,6 +57,9 @@ cutTransitions (c0, cs) = S.unions (c0:cs)
 
 type SimpConfig = ([[SimpleCut] -> OptIO [SimpleCut]], SimpleCut, Int)
 
+noSimp :: PetriNet -> Formula Transition -> SimpConfig
+noSimp _ _ = ([], (S.empty, []), 0)
+
 simpWithoutFormula :: PetriNet -> Formula Transition -> SimpConfig
 simpWithoutFormula net f =
         (
@@ -86,8 +89,7 @@ simpWithFormula net f =
 
 applySimpConfig :: SimpConfig -> [Cut] -> OptIO [SimpleCut]
 applySimpConfig (simpFunctions, initialCut, otfIndex) cuts = do
-            simp <- opt optSimpFormula
-            let (otfSimps, afterSimps) = splitAt otfIndex $ take simp simpFunctions
+            let (otfSimps, afterSimps) = splitAt otfIndex simpFunctions
             let simpFunction = foldl (>=>) return afterSimps
             let otfFunction = foldl (>=>) return otfSimps
             let cnfCuts = map cutToSimpleDNFCuts cuts
@@ -100,9 +102,14 @@ applySimpConfig (simpFunctions, initialCut, otfIndex) cuts = do
 
 generateCuts :: PetriNet -> Formula Transition -> [Cut] -> OptIO [SimpleCut]
 generateCuts net f cuts = do
-        let configs = [simpWithFormula, simpWithoutFormula]
-        let tasks = map (\c -> applySimpConfig (c net f) cuts) configs
+        let configs = [noSimp, simpWithFormula, simpWithoutFormula]
+        simp <- opt optSimpFormula
+        let simpConfig | simp < 0 = drop 1 configs
+                       | simp >= length configs = error ("Invalid simplification: " ++ show simp)
+                       | otherwise = [configs !! simp]
+        let tasks = map (\c -> applySimpConfig (c net f) cuts) simpConfig
         rs <- parallelIO tasks
+        verbosePut 2 $ "Number of disjuncts in simplified versions: " ++ show (map length rs)
         return $ minimumBy (comparing length) rs
 
 combineCuts :: [SimpleCut] -> [SimpleCut]
