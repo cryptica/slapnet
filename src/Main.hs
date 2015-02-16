@@ -123,7 +123,7 @@ checkFile file = do
             Just outputfile ->
                 writeFiles outputfile net' props'''
             Nothing -> return ()
-        -- TODO: short-circuit?
+        -- TODO: short-circuit? parallel?
         rs <- mapM (checkProperty net') props'''
         verbosePut 0 ""
         return $ resultsAnd rs
@@ -314,7 +314,7 @@ checkLivenessProperty net f = do
         auto <- opt optAuto
         r <-
             if auto then do
-                rAll <- mapM ($ checkLivenessProperty' net f []) methods
+                rAll <- parallelIO $ map ($ checkLivenessProperty' net f []) methods
                 verbosePut 2 $
                     "Number of refinements in tested methods: " ++ show (map (length . snd) rAll)
                 let rSucc = filter (isNothing . fst) rAll
@@ -442,7 +442,8 @@ main = do
                         optTransformations= reverse (optTransformations opts)
                     }
                 rs <- runReaderT (mapM checkFile files) opts'
-                -- TODO: short-circuit with Control.Monad.Loops?
+                -- TODO: short-circuit with Control.Monad.Loops? parallel
+                -- execution?
                 case resultsAnd rs of
                     Satisfied ->
                         exitSuccessWith "All properties satisfied."
