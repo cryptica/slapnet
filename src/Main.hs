@@ -324,6 +324,9 @@ checkLivenessProperty net f = do
         case r of
             (Nothing, cuts) -> do
                 verbosePut 2 $ "Number of refinements: " ++ show (length cuts)
+                let cutSizes= map (invariantSize . cutToLivenessInvariant) cuts
+                verbosePut 2 $ "Number of atoms in refinements: " ++ show cutSizes ++
+                        " (total of " ++ show (sum cutSizes) ++ ")"
                 invariant <- opt optInvariant
                 if invariant then
                     getLivenessInvariant net f cuts >>= printInvariant
