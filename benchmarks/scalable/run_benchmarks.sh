@@ -1,25 +1,46 @@
 #!/usr/bin/bash
 
-benchmarks=( "Lamport" "Dijkstra" "Peterson" "Szymanski" "LeaderElectionDKR82" "LeaderElectionCR79" "Snapshot" )
+benchmarks=( "Lamport" "Dekker" "Szymanski" "Snapshot" "LeaderElectionDKR82" "Peterson" )
 suffix=""
-n=6
-m=1
+
+#2 hours
+time_soft=$(expr 2 \* 3600)
+time_hard=$(expr $time_soft + 60)
+#6 gigabyte
+mem_soft=$(expr 6 \* 1024 \* 1024)
+mem_hard=$(expr $mem_soft + 1024)
 
 for benchmark in ${benchmarks[@]}; do
     echo "Runnng benchmark $benchmark"
-
     bf="${benchmark}/benchmark${suffix}.out"
+    echo "n user system elapsed memory" >$bf
 
-    echo "n user system memory" >$bf
+    if [[ $benchmark == "Dekker" || $benchmark == "Szymanski" ]]; then
+        nmax=2
+    else
+        nmax=5
+    fi
 
-    for i in $(seq 2 $n); do
-        net="${benchmark}/n${i}${suffix}.pnet"
-        echo "Testing net $net"
-        for j in $(seq 1 $m); do
-            echo -n "$i " >>$bf
-            /usr/bin/time -f "%U %S %M" -a -o $bf ../../slapnet $net -vv > "${net}.out"
-        done
+    for n in $(seq 2 $nmax); do
+        file="${benchmark}/n${n}${suffix}.pnet"
+        echo "Testing net $file"
+        echo -n "$n " >>$bf
+        output=$file-$n.out
+        (
+            ulimit -S -t $time_soft
+            ulimit -H -t $time_hard
+            ulimit -S -v $mem_soft
+            ulimit -H -v $mem_hard
+            /usr/bin/time -f "%U %S %e %M" -a -o $bf slapnet -vi --auto $file > ${file}${suffix}.out
+        )
+        result=$?
+        if [[ result -eq 0 ]]; then
+            echo 'Positive result'
+        elif [[ result -eq 1 ]]; then
+            echo 'Negative result'
+        else
+            echo 'Error'
+        fi
     done
-
     echo
 done
