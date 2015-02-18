@@ -30,6 +30,7 @@ import Solver
 import Solver.StateEquation
 import Solver.TrapConstraints
 import Solver.TransitionInvariant
+import Solver.BooleanTransitionInvariant
 import Solver.SubnetEmptyTrap
 import Solver.LivenessInvariant
 import Solver.SafetyInvariant
@@ -347,7 +348,10 @@ getLivenessInvariant net f cuts = do
 checkLivenessProperty' :: PetriNet ->
         Formula Transition -> [Cut] -> OptIO (Maybe FiringVector, [Cut])
 checkLivenessProperty' net f cuts = do
-        r <- checkSat $ checkTransitionInvariantSat net f cuts
+        boolConst <- opt optBoolConst
+        r <- if boolConst
+                then checkSat $ checkBooleanTransitionInvariantSat net f cuts
+                else checkSat $ checkTransitionInvariantSat net f cuts
         case r of
             Nothing -> return (Nothing, cuts)
             Just x -> do

@@ -47,6 +47,7 @@ data Options = Options { inputFormat :: InputFormat
                        , optMinimizeRefinement :: Int
                        , optAuto :: Bool
                        , optInvariant :: Bool
+                       , optBoolConst :: Bool
                        , optOutput :: Maybe String
                        , outputFormat :: OutputFormat
                        , optUseProperties :: Bool
@@ -65,6 +66,7 @@ startOptions = Options { inputFormat = PNET
                        , optMinimizeRefinement = 0
                        , optAuto = False
                        , optInvariant = False
+                       , optBoolConst = False
                        , optOutput = Nothing
                        , outputFormat = OutLOLA
                        , optUseProperties = True
@@ -178,6 +180,11 @@ options =
         , Option "i" ["invariant"]
         (NoArg (\opt -> Right opt { optInvariant = True }))
         "Generate an invariant"
+
+        , Option "" ["bool-const"]
+        (NoArg (\opt -> Right opt { optBoolConst = True }))
+        ("Use boolean constraints instead of integer ones\n" ++
+         "  for transition invariant")
 
         , Option "r" ["refinement"]
         (ReqArg (\arg opt -> case reads arg :: [(Int, String)] of

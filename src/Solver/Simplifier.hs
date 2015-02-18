@@ -1,6 +1,5 @@
 module Solver.Simplifier (
      checkSubsumptionSat
-    ,SimpleCut
     ,generateCuts
     ,greedySimplify
     ,formulaToCut
