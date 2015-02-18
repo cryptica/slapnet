@@ -94,7 +94,8 @@ checkLivenessInvariantSat :: PetriNet -> Formula Transition -> SimpleCut -> Cons
 checkLivenessInvariantSat net f (c0, cs) =
         -- TODO: use own variables for formula cut
         let (f0, fs) = formulaToCut f
-            cut = (c0 `S.union` f0, simplifyPositiveCut (cs ++ fs))
+            c0' = c0 `S.union` f0
+            cut = (c0', simplifyPositiveCut c0' (cs ++ fs))
             namedCut = nameCut cut
             names = cutNames net namedCut
             myVarMap fvm = M.fromList $ names `zip` fmap fvm names

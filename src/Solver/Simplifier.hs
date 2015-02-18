@@ -117,10 +117,10 @@ generateCuts net f cuts = do
 
 combineCuts :: [SimpleCut] -> [SimpleCut]
 combineCuts cuts =
-            M.toList $ M.fromListWith combineFunc cuts
+            M.toList $ M.fromListWithKey combineFunc cuts
         where
-            combineFunc cs cs' =
-                simplifyPositiveCut [ c `S.union` c' | c <- cs, c' <- cs' ]
+            combineFunc c0 cs cs' =
+                simplifyPositiveCut c0 [ c `S.union` c' | c <- cs, c' <- cs' ]
 
 filterInvariantTransitions :: PetriNet -> [SimpleCut] -> [SimpleCut]
 filterInvariantTransitions net =
@@ -145,15 +145,15 @@ simplifyCuts = mapMaybe simplifyCut
 
 simplifyCut :: SimpleCut -> Maybe SimpleCut
 simplifyCut (c0, cs) =
-        let remove b a = a `S.difference` b
-            cs' = simplifyPositiveCut $ map (remove c0) cs
+        let cs' = simplifyPositiveCut c0 cs
         in  if any S.null cs' then
                 Nothing
             else
                 Just (c0, cs')
 
-simplifyPositiveCut :: [S.Set Transition] -> [S.Set Transition]
-simplifyPositiveCut = removeWith S.isSubsetOf 
+simplifyPositiveCut :: S.Set Transition -> [S.Set Transition] -> [S.Set Transition]
+simplifyPositiveCut c0 =
+        removeWith S.isSubsetOf . map (`S.difference` c0)
 
 simplifyBySubsumption :: [SimpleCut] -> OptIO [SimpleCut]
 simplifyBySubsumption = simplifyBySubsumption' []
