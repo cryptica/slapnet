@@ -50,7 +50,7 @@ checkClosed net x p' y =
                                     [(t,t') | t <- pre net p, t' <- post net p,
                                               val x t > 0, val x t' > 0 ]
                   in  pVal ==> postVal
-              checkTransition (t,t') = positiveVal y t ==> positiveVal y t'
+              checkTransition (t,t') = val y t .== val y t'
 
 checkTokens :: PetriNet -> SIMap Place -> SBool
 checkTokens net p' =
@@ -98,8 +98,8 @@ cutFromAssignment :: PetriNet -> FiringVector -> IMap Place ->
 cutFromAssignment net x p' t' y =
         let ts = filter (\t -> val x t > 0) $ elems $ M.filter (> 0) t'
             (t1, t2) = partition (\t -> val y t > 0) ts
-            s1 = filter (\p -> val p' p > 0) $ mpre net t1
-            s2 = filter (\p -> val p' p > 0) $ mpre net t2
+            s1 = filter (\p -> val p' p > 0) $ mpost net t1
+            s2 = filter (\p -> val p' p > 0) $ mpost net t2
             curSize = fromIntegral $ M.size $ M.filter (> 0) p'
         in  (constructCut net x [s1,s2], curSize)
 
