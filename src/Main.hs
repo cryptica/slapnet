@@ -368,18 +368,16 @@ findLivenessRefinement net x = do
         refinementType <- opt optRefinementType
         case refinementType of
             Just TrapRefinement ->
-                findLivenessRefinementByEmptyTraps net (initialMarking net) x []
+                findLivenessRefinementByEmptyTraps net x
             Just SComponentRefinement -> do
                 r1 <- findLivenessRefinementBySComponent net x
                 case r1 of
-                    Nothing -> findLivenessRefinementByEmptyTraps net
-                                                      (initialMarking net) x []
+                    Nothing -> findLivenessRefinementByEmptyTraps net x
                     Just _ -> return r1
             Just SComponentWithCutRefinement -> do
                 r1 <- findLivenessRefinementBySComponentWithCut net x
                 case r1 of
-                    Nothing -> findLivenessRefinementByEmptyTraps net
-                                                      (initialMarking net) x []
+                    Nothing -> findLivenessRefinementByEmptyTraps net x
                     Just _ -> return r1
             Nothing -> return Nothing
 
@@ -393,18 +391,24 @@ findLivenessRefinementBySComponentWithCut :: PetriNet -> FiringVector ->
 findLivenessRefinementBySComponentWithCut net x =
         checkSatMin $ checkSComponentWithCutSat net x
 
-findLivenessRefinementByEmptyTraps :: PetriNet -> Marking -> FiringVector ->
-        [Trap] -> OptIO (Maybe Cut)
-findLivenessRefinementByEmptyTraps net m x traps = do
+findLivenessRefinementByEmptyTraps :: PetriNet -> FiringVector -> OptIO (Maybe Cut)
+findLivenessRefinementByEmptyTraps net x =
+        findLivenessRefinementByEmptyTraps' net (initialMarking net) x [] True
+
+findLivenessRefinementByEmptyTraps' :: PetriNet -> Marking -> FiringVector ->
+        [Trap] -> Bool -> OptIO (Maybe Cut)
+findLivenessRefinementByEmptyTraps' net m x traps cont = do
         r <- checkSatMin $ checkSubnetEmptyTrapSat net m x
         case r of
             Nothing -> do
                 rm <- refineSafetyProperty net FTrue traps m
-                case rm of
-                    (Nothing, _) -> do
+                case (rm, cont) of
+                    ((Nothing, _), _) -> do
                         cut <- generateLivenessRefinement net x traps
                         return $ Just cut
-                    (Just _, _) ->
+                    ((Just m', _), True) ->
+                        findLivenessRefinementByEmptyTraps' net m' x traps False
+                    ((Just _, _), False) ->
                         return Nothing
             Just trap -> do
                 let traps' = trap:traps
@@ -415,7 +419,7 @@ findLivenessRefinementByEmptyTraps net m x traps = do
                         cut <- generateLivenessRefinement net x traps'
                         return $ Just cut
                     (Just m', _) ->
-                        findLivenessRefinementByEmptyTraps net m' x traps'
+                        findLivenessRefinementByEmptyTraps' net m' x traps' True
 
 generateLivenessRefinement :: PetriNet -> FiringVector -> [Trap] -> OptIO Cut
 generateLivenessRefinement net x traps = do
