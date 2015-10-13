@@ -66,3 +66,6 @@ safety property {
 liveness property "fair termination" {
     dh >= 1 && dg >= 1
 }
+liveness property "h dispatched" {
+    dh = 0
+}
