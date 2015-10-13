@@ -19,7 +19,7 @@ import PetriNet
 
 data LivenessInvariant =
             RankingFunction (SimpleCut, Vector Place)
-          | ComponentCut (SimpleCut, [Trap])
+          | ComponentCut (SimpleCut, [Trap]) -- TODO: add proof why 
 
 instance Invariant LivenessInvariant where
         invariantSize (RankingFunction ((c0, cs), ps)) =

@@ -404,6 +404,7 @@ findLivenessRefinementByEmptyTraps' net m x traps cont = do
                 rm <- refineSafetyProperty net FTrue traps m
                 case (rm, cont) of
                     ((Nothing, _), _) -> do
+                        -- TODO: include traps needed for proving safety
                         cut <- generateLivenessRefinement net x traps
                         return $ Just cut
                     ((Just m', _), True) ->
