@@ -105,14 +105,17 @@ instance Show PetriNet where
 
 -- TODO: better cuts, scc, min cut?
 
-constructCut:: PetriNet -> FiringVector -> [Trap] -> Cut
+--trapComponent :: PetriNet -> [Place] -> ([Place], [Transition])
+--trapComponent net trap = (sort trap, sort (mpre net trap))
+
+constructCut :: PetriNet -> FiringVector -> [Trap] -> Cut
 constructCut net _ traps = (trapComponents, trapOutputs)
-        where trapComponent trap = (sort trap, sort (mpre net trap) \\ trapOutputs)
+        where trapComponent trap = (sort trap, sort (mpre net trap) \\ trapOutputs) :: ([Place], [Transition])
               trapComponents = listSet $ map trapComponent traps
               trapOutput trap = mpost net trap \\ mpre net trap
               trapOutputs = listSet $ concatMap trapOutput traps
 {-
-constructCut:: PetriNet -> FiringVector -> [Trap] -> Cut
+constructCut :: PetriNet -> FiringVector -> [Trap] -> Cut
 constructCut net x _ = (map (\t -> ([],[t])) tPositive, tNegative)
         where tPositive = elems x
               tNegative = transitions net \\ tPositive

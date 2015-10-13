@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Solver.TransitionInvariant
     (checkTransitionInvariantSat
     ,checkTransitionInvariantWithSimpleCutSat
