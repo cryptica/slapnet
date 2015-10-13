@@ -105,9 +105,6 @@ instance Show PetriNet where
 
 -- TODO: better cuts, scc, min cut?
 
---trapComponent :: PetriNet -> [Place] -> ([Place], [Transition])
---trapComponent net trap = (sort trap, sort (mpre net trap))
-
 constructCut :: PetriNet -> FiringVector -> [Trap] -> Cut
 constructCut net _ traps = (trapComponents, trapOutputs)
         where trapComponent trap = (sort trap, sort (mpre net trap) \\ trapOutputs) :: ([Place], [Transition])
