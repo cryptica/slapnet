@@ -97,6 +97,13 @@ checkSizeLimit p1 p2 t0 t1 t2 (Just (minMethod, (p1Size, p2Size, t0Size, t1Size,
                 4 -> (p1SizeNext + p2SizeNext .> p1SizeNow + p2SizeNow) |||
                     (p1SizeNext + p2SizeNext .== p1SizeNow + p2SizeNow &&&
                         t0SizeNext .< t0SizeNow)
+                5 -> (p1SizeNext + p2SizeNext .< p1SizeNow + p2SizeNow)
+                6 -> (p1SizeNext + p2SizeNext .> p1SizeNow + p2SizeNow)
+                7 -> (t1SizeNext .> t1SizeNow &&& t2SizeNext .>= t2SizeNow) |||
+                    (t1SizeNext .>= t1SizeNow &&& t2SizeNext .> t2SizeNow)
+                8 -> (t1SizeNext .< t1SizeNow &&& t2SizeNext .<= t2SizeNow) |||
+                    (t1SizeNext .<= t1SizeNow &&& t2SizeNext .< t2SizeNow)
+                9 -> (t1SizeNext + t2SizeNext .> t1SizeNow + t2SizeNow)
                 _ -> error $ "minimization method " ++ show minMethod ++ " not supported"
 
 checkSComponent :: PetriNet -> FiringVector -> Maybe (Int, SizeIndicator) ->
