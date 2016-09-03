@@ -7,7 +7,7 @@ description:
 license:             GPL-3
 license-file:        LICENSE
 author:              Philipp Meyer
-maintainer:          philipp.j.meyer@gmail.com
+maintainer:          meyerphi@in.tum.de
 category:            Formal Methods
 build-type:          Simple
 extra-source-files:  README.md
